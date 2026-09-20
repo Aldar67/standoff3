@@ -10,7 +10,7 @@ import os, sys, shutil, zipfile, json, stat, time
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DIST = os.path.join(ROOT, os.environ.get('S3_DIST', 'dist'))  # S3_DIST=dist-test для сборки в другую папку
-GAME_FILES = ['index.html', 'style.css', 'src', 'lib']
+GAME_FILES = ['index.html', 'style.css', 'server-config.js', 'src', 'lib']
 SHELL_FILES = ['main.js', 'preload.js', 'package.json', 'config.json']
 
 def version():

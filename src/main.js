@@ -184,7 +184,8 @@
   // Desktop build (Electron): config.json carries the relay address of the owner's VPS; it becomes the default for
   // both hosting and joining so nobody has to type it (the owner's config wins over a previously typed address).
   function applyNetDefaults(cfg) {
-    const S = S3.Settings.data; const def = (cfg && cfg.defaultServer && !/ВАШ_VPS/.test(cfg.defaultServer)) ? cfg.defaultServer : '';
+    const S = S3.Settings.data; let def = (cfg && cfg.defaultServer && !/ВАШ_VPS/.test(cfg.defaultServer)) ? cfg.defaultServer : '';
+    if (!def && window.S3_DEFAULT_SERVER) def = window.S3_DEFAULT_SERVER; // browser build: server-config.js next to index.html
     $('#net-host-addr').value = def || S.netHostAddr || 'ws://localhost:8766';
     $('#net-join-addr').value = def || S.netJoinAddr || '';
     if (def) { $('#net-host-info').innerHTML = `Адрес вашего сервера (VPS) уже подставлен: <code>${def}</code>. Нажмите «Подключиться как хост», дождитесь остальных в списке и запустите матч. Для игры по локальной сети без VPS запустите <b>Standoff3-LAN-Server.bat</b> из папки <b>server</b> и укажите <code>ws://localhost:8766</code>.`; $('#net-join-info').innerHTML = `Адрес сервера уже подставлен — впишите ник и нажмите «Подключиться», затем ждите, пока хост запустит матч.`; }

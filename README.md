@@ -10,6 +10,7 @@
 
 **Игра через интернет (VPS):** в файле `config.json` рядом с exe / .command укажите адрес своего сервера:
 `{ "defaultServer": "ws://IP_VPS:8766" }` — он будет подставлен во вкладке «Игра по сети» и у хоста, и у остальных.
+Для браузерной версии (запуск `index.html`) адрес лежит в `server-config.js` рядом с `index.html`.
 Установка сервера на VPS (Ubuntu/Debian, от root): `scp server.py vps/install.sh root@IP_VPS:/root/ && ssh root@IP_VPS bash /root/install.sh`
 — создаётся служба systemd `standoff3` и открывается порт 8766. Один VPS = одна комната (одна компания за раз).
 
