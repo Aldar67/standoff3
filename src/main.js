@@ -141,7 +141,7 @@
   }
   function hostConnect() {
     const name = $('#net-host-name').value.trim() || 'Хост'; const addr = $('#net-host-addr').value.trim() || 'ws://localhost:8766';
-    S3.Settings.data.playerName = name; S3.Settings.save();
+    S3.Settings.data.playerName = name; S3.Settings.data.netHostAddr = addr; S3.Settings.save();
     const status = $('#net-host-status'); status.textContent = 'Подключение к серверу...'; status.className = 'net-status';
     const n = new S3.Net();
     n.on('hello', (msg) => { if (!net.players.find((p) => p.id === msg._from)) net.players.push({ id: msg._from, name: msg.name, skins: S3.cleanSkinMap(msg.skins) }); renderNetPlayers(); });
@@ -163,7 +163,7 @@
     const name = $('#net-join-name').value.trim() || 'Игрок'; const addr = $('#net-join-addr').value.trim();
     const status = $('#net-join-status');
     if (!addr) { status.textContent = 'Введите адрес хоста'; status.className = 'net-status err'; return; }
-    S3.Settings.data.playerName = name; S3.Settings.save();
+    S3.Settings.data.playerName = name; S3.Settings.data.netJoinAddr = addr; S3.Settings.save();
     status.textContent = 'Подключение...'; status.className = 'net-status';
     const n = new S3.Net(); n.skins = S3.Inventory.equippedMap();
     n.on('ev', (msg) => {
@@ -176,6 +176,20 @@
     n.connect(addr, name, false).then(() => { net.conn = n; net.role = 'client'; status.textContent = 'Подключено. Ожидание запуска матча хостом...'; status.className = 'net-status ok'; })
       .catch((e) => { status.textContent = 'Не удалось подключиться (' + e.message + ')'; status.className = 'net-status err'; });
   }
+  // Desktop build (Electron): config.json carries the relay address of the owner's VPS; it becomes the default for
+  // both hosting and joining so nobody has to type it. A previously used address (saved in settings) wins over it.
+  function applyNetDefaults(cfg) {
+    const S = S3.Settings.data; const def = (cfg && cfg.defaultServer && !/ВАШ_VPS/.test(cfg.defaultServer)) ? cfg.defaultServer : '';
+    $('#net-host-addr').value = S.netHostAddr || def || 'ws://localhost:8766';
+    $('#net-join-addr').value = S.netJoinAddr || def || '';
+    if (def) { $('#net-host-info').innerHTML = `Адрес вашего сервера (VPS) уже подставлен: <code>${def}</code>. Нажмите «Подключиться как хост», дождитесь остальных в списке и запустите матч. Для игры по локальной сети без VPS запустите <b>Standoff3-LAN-Server.bat</b> из папки <b>server</b> и укажите <code>ws://localhost:8766</code>.`; $('#net-join-info').innerHTML = `Адрес сервера уже подставлен — впишите ник и нажмите «Подключиться», затем ждите, пока хост запустит матч.`; }
+  }
+  function bindDesktop() {
+    const D = window.S3_DESKTOP; if (!D) { applyNetDefaults(null); return; }
+    document.body.classList.add('desktop'); $('#btn-quit-app').style.display = '';
+    $('#btn-quit-app').addEventListener('click', () => { if (confirm('Выйти из игры?')) D.quit(); });
+    D.getConfig().then(applyNetDefaults).catch(() => applyNetDefaults(null));
+  }
   function bindNetworkMenu() {
     $$('.net-tab').forEach((t) => t.addEventListener('click', () => netTabSwitch(t.dataset.nettab)));
     $('#net-host-name').value = S3.Settings.data.playerName || 'Игрок'; $('#net-join-name').value = S3.Settings.data.playerName || 'Игрок';
@@ -185,6 +199,7 @@
     $('#net-bots-range').addEventListener('input', (e) => { state.bots = +e.target.value; $('#net-bots-val').textContent = state.bots; });
   }
 
+  let fsOn = false;
   function bindMenu() {
     $$('[data-panel]').forEach((b) => b.addEventListener('click', () => {
       const id = b.dataset.panel;
@@ -212,7 +227,7 @@
       if (game.hud.buyOpen) { if (game.hud.buyKey(e.code)) e.preventDefault(); return; }
       if (e.code === 'Escape' && game.paused && !game.over) { resumeGame(); return; }
       if (e.code === 'Escape' && !game.paused && !S3.Input.locked) { pauseGame(); return; }
-      if (e.code === 'F11') { e.preventDefault(); if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { }); else document.exitFullscreen(); }
+      if (e.code === 'F11') { e.preventDefault(); if (window.S3_DESKTOP) { fsOn = !fsOn; window.S3_DESKTOP.setFullscreen(fsOn); } else if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { }); else document.exitFullscreen(); }
       // radio menu (Z + number)
       if (e.code === 'KeyZ' && game.player.alive) { game.radioOpen = !game.radioOpen; game.hud.setHint(game.radioOpen ? 'Радио: ' + S3.RADIO.map((r) => r.key + '-' + r.text).join('  ') : ''); if (game.radioOpen) game.hud.hintT = -5; }
       else if (game.radioOpen && /^Digit[1-9]$/.test(e.code)) { const r = S3.RADIO.find((x) => x.key === e.code.slice(5)); if (r) { if (game.net && game.net.role === 'client') game.net.sendRadio(r.key); else game.radio(game.player, r.text); } game.radioOpen = false; game.hud.setHint(''); e.preventDefault(); }
@@ -220,7 +235,7 @@
     $('#menu-version').textContent = 'v' + S3.VERSION + ' · Three.js r158 · процедурные текстуры, модели и звук';
   }
   function init() {
-    S3.Settings.load(); S3.Stats.load(); S3.Inventory.load(); bindMenu(); renderPlay(); showPanel('panel-main'); $('#menu').style.display = 'flex';
+    S3.Settings.load(); S3.Stats.load(); S3.Inventory.load(); bindMenu(); bindDesktop(); renderPlay(); showPanel('panel-main'); $('#menu').style.display = 'flex';
     if (!window.THREE) { alert('Three.js не загрузился. Проверьте файл lib/three.min.js'); }
   }
   window.addEventListener('DOMContentLoaded', init);
