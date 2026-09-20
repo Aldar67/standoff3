@@ -6,7 +6,10 @@
 (function () {
   const S3 = window.S3;
   const $ = (s) => document.querySelector(s);
-  const cmds = {}; const history = []; let histIdx = -1; let open = false; let app = null;
+  const cmds = {}; const history = []; let histIdx = -1; let open = false; let app = null; let openedAt = 0;
+  // ЙЦУКЕН -> QWERTY, so a command typed with the Russian layout still works ("рудз" -> "help")
+  const RU = 'йцукенгшщзхъфывапролджэячсмитьбю.ё', EN = "qwertyuiop[]asdfghjkl;'zxcvbnm,./`";
+  const fromRu = (s) => s.split('').map((ch) => { const i = RU.indexOf(ch.toLowerCase()); return i >= 0 ? EN[i] : ch; }).join('');
 
   const C = S3.Console = {
     register(name, help, fn) { cmds[name] = { name, help, fn }; },
@@ -19,23 +22,30 @@
         else if (e.code === 'ArrowUp') { if (history.length) { histIdx = Math.max(0, histIdx < 0 ? history.length - 1 : histIdx - 1); inp.value = history[histIdx]; } e.preventDefault(); }
         else if (e.code === 'ArrowDown') { if (histIdx >= 0) { histIdx = Math.min(history.length, histIdx + 1); inp.value = history[histIdx] || ''; if (histIdx >= history.length) histIdx = -1; } e.preventDefault(); }
         else if (e.code === 'Tab') { const pre = inp.value.trim().toLowerCase(); const m = Object.keys(cmds).filter((k) => k.startsWith(pre)).sort(); if (m.length === 1) inp.value = m[0] + ' '; else if (m.length > 1) C.print(m.join('  '), 'dim'); e.preventDefault(); }
-        else if (e.code === 'Escape' || e.code === 'Backquote') { C.toggle(false); e.preventDefault(); }
+        else if (e.code === 'Escape' || (e.code === 'Backquote' && !e.repeat && performance.now() - openedAt > 250)) { C.toggle(false); e.preventDefault(); }
+        else if (e.code === 'Backquote') e.preventDefault(); // key auto-repeat / the opening keystroke must not close it or type a backtick
         e.stopPropagation();
       });
+      // clicking anywhere inside the console box puts the caret back into the input
+      $('#console .con-box').addEventListener('mousedown', () => setTimeout(() => inp.focus(), 0));
       $('#console').addEventListener('mousedown', (e) => { if (e.target.id === 'console') C.toggle(false); });
-      C.print('Standoff 3 v' + S3.VERSION + ' — консоль. Введите help для списка команд.', 'dim');
+      C.print('Standoff 3 v' + S3.VERSION + ' — консоль. Введите help для списка команд (можно и в русской раскладке: рудз). Закрыть: ` или Esc.', 'dim');
     },
     toggle(force) {
       open = force !== undefined ? !!force : !open;
       $('#console').style.display = open ? 'flex' : 'none';
       S3.Input.blocked = open;
-      if (open) { S3.Input.keys = {}; S3.Input.unlock(); setTimeout(() => $('#console-input').focus(), 0); }
+      if (open) { openedAt = performance.now(); S3.Input.keys = {}; S3.Input.unlock(); const inp = $('#console-input'); inp.focus(); setTimeout(() => inp.focus(), 0); setTimeout(() => inp.focus(), 80); }
       else { const g = app && app.getGame(); if (g && !g.paused && !g.over && !g.hud.buyOpen) S3.Input.lock(); }
     },
     // called from the global keydown handler; returns true if the key was consumed
     handleKey(e) {
-      if (e.code === 'Backquote' && !e.ctrlKey && !e.altKey) { C.toggle(); e.preventDefault(); return true; }
-      return open; // while open, every other key belongs to the input box
+      if (e.code === 'Backquote' && !e.ctrlKey && !e.altKey) { if (!e.repeat) C.toggle(); e.preventDefault(); return true; }
+      if (open) { // focus got lost (click on the canvas etc.): bring it back and don't drop the typed character
+        const inp = $('#console-input'); if (document.activeElement !== inp) { inp.focus(); if (e.key && e.key.length === 1 && !e.ctrlKey && !e.altKey) { inp.value += e.key; e.preventDefault(); } }
+        return true;
+      }
+      return false;
     },
     print(text, cls) {
       const out = $('#console-out'); const d = document.createElement('div'); d.className = 'con-line ' + (cls || ''); d.textContent = text; out.appendChild(d);
@@ -44,7 +54,8 @@
     exec(line) {
       history.push(line); if (history.length > 100) history.shift(); histIdx = -1;
       C.print('> ' + line, 'echo');
-      const parts = line.match(/(?:[^\s"]+|"[^"]*")+/g) || []; const name = (parts.shift() || '').toLowerCase(); const args = parts.map((p) => p.replace(/^"|"$/g, ''));
+      const parts = line.match(/(?:[^\s"]+|"[^"]*")+/g) || []; let name = (parts.shift() || '').toLowerCase(); const args = parts.map((p) => p.replace(/^"|"$/g, ''));
+      if (!cmds[name] && cmds[fromRu(name)]) name = fromRu(name); // typed on the Russian layout
       const c = cmds[name]; if (!c) { C.print(`Неизвестная команда: ${name}. help — список команд.`, 'err'); S3.Audio.error(); return; }
       try { const r = c.fn(args, { game: app && app.getGame(), print: C.print }); if (typeof r === 'string') C.print(r); } catch (e) { C.print('Ошибка: ' + e.message, 'err'); console.error(e); }
     },
