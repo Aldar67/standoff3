@@ -277,3 +277,12 @@ input[type=range] { accent-color: #ffb040; width: 180px; }
 .con-prompt { color: #ffb040; font-weight: 700; }
 #console-input { flex: 1; background: #0b0f14; border: 1px solid #2a3a4c; color: #e8edf2; font-family: inherit; font-size: 14px; padding: 6px 10px; border-radius: 4px; outline: none; }
 #console-input:focus { border-color: #ffb040; }
+
+/* ---------- rooms ---------- */
+.net-rooms { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.room-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; background: #141c26; border: 1px solid #2a3a4c; border-radius: 8px; cursor: pointer; }
+.room-row:hover { border-color: #5a7a9c; }
+.room-row.sel { border-color: #ffb040; background: #2a2416; }
+.room-row.started { opacity: 0.6; }
+.room-name { font-weight: 700; }
+.room-info { font-size: 12px; color: #9ab; }

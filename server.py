@@ -2,10 +2,11 @@
 # ===== Standoff 3 -- LAN relay server =====
 # Pure-stdlib WebSocket broadcast relay (no external dependencies required).
 #
-# It understands nothing about the game itself. Routing rule:
-#   - the first connection to send {"t":"hostclaim"} becomes THE HOST for this session
-#   - any message sent BY the host is broadcast to every OTHER connected client
-#   - any message sent by a non-host client is forwarded ONLY to the host
+# It understands nothing about the game itself. Routing rule (per ROOM -- several groups can share one relay):
+#   - the first connection to send {"t":"hostclaim","room":X} becomes THE HOST of room X
+#   - any message sent BY a host is broadcast to every OTHER member of its room
+#   - any message sent by a non-host member is forwarded ONLY to its room's host
+#   - {"t":"rooms"} answers with the list of rooms (host name, player count, started flag)
 # This is exactly what a host-authoritative game needs: clients talk only to the host,
 # and the host's snapshots/events reach everyone else.
 #
@@ -69,12 +70,21 @@ def try_parse_frame(buf):
 
 
 class State:
+    """Rooms: every connection joins a room with its first message (hostclaim / hello). Each room has at most
+    one host; routing never crosses rooms, so several groups can play on one relay at the same time.
+    Old clients that send no room name land in the room "default"."""
     def __init__(self):
         self.lock = threading.Lock()
-        self.clients = {}
-        self.names = {}
-        self.host_id = None
+        self.clients = {}    # cid -> socket
+        self.names = {}      # cid -> nickname
+        self.room_of = {}    # cid -> room code
+        self.rooms = {}      # code -> {"host": cid|None, "members": set(cid), "started": bool}
         self._next = 1
+
+    @staticmethod
+    def room_code(msg):
+        code = str(msg.get('room') or '').strip()[:32]
+        return code or 'default'
 
     def next_id(self):
         with self.lock:
@@ -86,57 +96,110 @@ class State:
         with self.lock:
             self.clients[cid] = conn
 
+    def _join(self, cid, code):
+        # caller holds the lock
+        old = self.room_of.get(cid)
+        if old and old != code:
+            self._leave_room(cid, old)
+        room = self.rooms.setdefault(code, {"host": None, "members": set(), "started": False})
+        room["members"].add(cid)
+        self.room_of[cid] = code
+        return room
+
+    def _leave_room(self, cid, code):
+        room = self.rooms.get(code)
+        if not room:
+            return None
+        room["members"].discard(cid)
+        was_host = room["host"] == cid
+        if was_host:
+            room["host"] = None
+            room["started"] = False
+        if not room["members"]:
+            del self.rooms[code]
+        return was_host
+
     def remove(self, cid, conn):
         if cid is None:
             return
-        was_host = False
         with self.lock:
             self.clients.pop(cid, None)
             name = self.names.pop(cid, '?')
-            if self.host_id == cid:
-                self.host_id = None
-                was_host = True
+            code = self.room_of.pop(cid, None)
+            was_host = self._leave_room(cid, code) if code else None
+            members = list(self.rooms.get(code, {}).get("members", [])) if code else []
+            host = self.rooms.get(code, {}).get("host") if code else None
         try:
             conn.close()
         except Exception:
             pass
         if was_host:
-            self.broadcast_all({"t": "sys", "event": "hostleft"})
-            print("[server] host (id=%d, %s) disconnected -- session ended" % (cid, name))
-        else:
-            self.send_to_host({"t": "sys", "event": "leave", "id": cid})
-            print("[server] client %d (%s) disconnected" % (cid, name))
+            self.send_many(members, {"t": "sys", "event": "hostleft"})
+            print("[server] host %s (id=%d) left room '%s'" % (name, cid, code))
+        elif host is not None:
+            self.send_to(host, {"t": "sys", "event": "leave", "id": cid})
+            print("[server] client %d (%s) left room '%s'" % (cid, name, code))
 
     def route(self, cid, msg):
         t = msg.get('t')
         if t == 'hostclaim':
-            claimed = False
+            self.names[cid] = msg.get('name', '?')
+            code = self.room_code(msg)
             with self.lock:
-                if self.host_id is None:
-                    self.host_id = cid
+                room = self._join(cid, code)
+                if room["host"] is None:
+                    room["host"] = cid
+                    room["started"] = False
                     claimed = True
+                else:
+                    claimed = False
+                host = room["host"]
+                members = list(room["members"])
             if claimed:
-                self.names[cid] = msg.get('name', '?')
-                print("[server] client %d (%s) is now HOST" % (cid, self.names[cid]))
-                self.broadcast_all({"t": "sys", "event": "hostset", "id": cid})
+                print("[server] %s (id=%d) is HOST of room '%s'" % (self.names[cid], cid, code))
+                self.send_many(members, {"t": "sys", "event": "hostset", "id": cid})
             else:
-                self.send_to(cid, {"t": "sys", "event": "hostset", "id": self.host_id})
+                self.send_to(cid, {"t": "sys", "event": "hostset", "id": host})  # busy: the client sees id != its own
             return
         if t == 'hello':
             self.names[cid] = msg.get('name', '?')
+            code = self.room_code(msg)
+            with self.lock:
+                room = self._join(cid, code)
+                host = room["host"]
+            if host is not None:
+                self.send_to(cid, {"t": "sys", "event": "hostset", "id": host})
+                msg['_from'] = cid
+                self.send_to(host, msg)
+            else:
+                self.send_to(cid, {"t": "sys", "event": "nohost"})
+            return
+        if t == 'rooms':
+            with self.lock:
+                lst = [{"code": c, "host": self.names.get(r["host"], '?') if r["host"] is not None else None,
+                        "players": len(r["members"]), "started": r["started"]} for c, r in self.rooms.items()]
+            self.send_to(cid, {"t": "rooms", "rooms": lst})
+            return
         with self.lock:
-            hid = self.host_id
-        if cid == hid:
-            self.broadcast_all(msg, exclude=cid)
-        elif hid is not None:
+            code = self.room_of.get(cid)
+            room = self.rooms.get(code) if code else None
+            host = room["host"] if room else None
+            members = [m for m in room["members"] if m != cid] if room else []
+            if room and cid == host and t == 'ev' and msg.get('k') == 'start':
+                room["started"] = True
+        if room is None:
+            return  # hasn't joined a room yet
+        if cid == host:
+            self.send_many(members, msg)
+        elif host is not None:
             msg['_from'] = cid  # stamp sender id so the host knows who this came from
-            self.send_to(hid, msg)
-        # else: no host yet -- drop silently
+            self.send_to(host, msg)
+        # else: room has no host yet -- drop silently
 
-    def broadcast_all(self, msg, exclude=None):
+    def send_many(self, cids, msg):
         data = encode_frame(json.dumps(msg, ensure_ascii=False).encode('utf-8'))
         with self.lock:
-            targets = [c for i, c in self.clients.items() if i != exclude]
+            targets = [self.clients[i] for i in cids if i in self.clients]
         for c in targets:
             try:
                 c.sendall(data)
@@ -153,12 +216,6 @@ class State:
             c.sendall(data)
         except Exception:
             pass
-
-    def send_to_host(self, msg):
-        with self.lock:
-            hid = self.host_id
-        if hid:
-            self.send_to(hid, msg)
 
 
 def send_json(conn, obj):
@@ -200,10 +257,6 @@ def handle_client(conn, addr, state):
         state.add(cid, conn)
         print("[server] %s connected as id=%d" % (addr[0], cid))
         send_json(conn, {"t": "welcome", "id": cid})
-        with state.lock:
-            current_host = state.host_id
-        if current_host is not None:
-            send_json(conn, {"t": "sys", "event": "hostset", "id": current_host})
         buf = rest
         conn.settimeout(120)
         while True:

@@ -10,15 +10,15 @@
       this.name = 'Игрок'; this.connected = false; this.handlers = {}; this.onCloseCb = null; this.onErrorCb = null;
     }
     on(type, fn) { this.handlers[type] = fn; return this; }
-    connect(url, name, wantHost) {
+    connect(url, name, wantHost, room) {
       return new Promise((resolve, reject) => {
         let settled = false;
-        this.name = name || 'Игрок';
+        this.name = name || 'Игрок'; this.room = (room || '').trim().slice(0, 32) || 'default';
         let ws;
         try { ws = new WebSocket(url); } catch (e) { reject(e); return; }
         this.ws = ws;
         const timeout = setTimeout(() => { if (!settled) { settled = true; try { ws.close(); } catch (e) { } reject(new Error('timeout')); } }, 6000);
-        ws.onopen = () => { this.connected = true; if (wantHost) this.send({ t: 'hostclaim', name: this.name }); else this.send({ t: 'hello', name: this.name, skins: this.skins || {} }); };
+        ws.onopen = () => { this.connected = true; if (wantHost) this.send({ t: 'hostclaim', name: this.name, room: this.room }); else this.send({ t: 'hello', name: this.name, room: this.room, skins: this.skins || {} }); };
         ws.onmessage = (ev) => {
           let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
           if (msg.t === 'welcome') {
@@ -34,10 +34,11 @@
               else { try { ws.close(); } catch (e) { } reject(new Error('busy')); } // somebody else already holds the host seat on this relay
             } else if (!wantHost) {
               // the host appeared after we joined: our hello was dropped by the relay, send it again so we show up in the lobby
-              if (had !== this.hostId) this.send({ t: 'hello', name: this.name, skins: this.skins || {} });
+              if (had !== this.hostId) this.send({ t: 'hello', name: this.name, room: this.room, skins: this.skins || {} });
               if (this.handlers.hostset) this.handlers.hostset(msg);
             }
-          } else if (msg.t === 'sys' && msg.event === 'hostleft') { if (this.handlers.hostleft) this.handlers.hostleft(); }
+          } else if (msg.t === 'sys' && msg.event === 'hostleft') { this.hostId = null; if (this.handlers.hostleft) this.handlers.hostleft(); }
+          else if (msg.t === 'sys' && msg.event === 'nohost') { /* joined a room that has no host yet; hostset will follow when one appears */ }
           else if (msg.t === 'sys' && msg.event === 'leave') { if (this.handlers.leave) this.handlers.leave(msg.id); }
           else { const h = this.handlers[msg.t]; if (h) h(msg); else if (this.handlers.message) this.handlers.message(msg); }
         };
@@ -46,6 +47,16 @@
       });
     }
     send(obj) { if (this.ws && this.connected) { try { this.ws.send(JSON.stringify(obj)); } catch (e) { } } }
+    // one-shot: open a connection, ask the relay for its room list, close. Resolves to [{code, host, players, started}]
+    static listRooms(url) {
+      return new Promise((resolve, reject) => {
+        let ws; try { ws = new WebSocket(url); } catch (e) { reject(e); return; }
+        const timer = setTimeout(() => { try { ws.close(); } catch (e) { } reject(new Error('timeout')); }, 5000);
+        ws.onopen = () => ws.send(JSON.stringify({ t: 'rooms' }));
+        ws.onmessage = (ev) => { let m; try { m = JSON.parse(ev.data); } catch (e) { return; } if (m.t === 'rooms') { clearTimeout(timer); resolve(m.rooms || []); try { ws.close(); } catch (e) { } } };
+        ws.onerror = () => { clearTimeout(timer); reject(new Error('нет связи с сервером')); };
+      });
+    }
     close() { if (this.ws) { try { this.ws.close(); } catch (e) { } } this.connected = false; }
   }
   S3.Net = Net;
