@@ -199,8 +199,12 @@
     $('#net-bots-range').addEventListener('input', (e) => { state.bots = +e.target.value; $('#net-bots-val').textContent = state.bots; });
   }
 
-  let fsOn = false;
+  function toggleFullscreen() {
+    if (window.S3_DESKTOP) window.S3_DESKTOP.setFullscreen(); // the window toggles based on its real state
+    else if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { }); else document.exitFullscreen();
+  }
   function bindMenu() {
+    $('#btn-fullscreen').addEventListener('click', toggleFullscreen);
     $$('[data-panel]').forEach((b) => b.addEventListener('click', () => {
       const id = b.dataset.panel;
       if (id === 'panel-main' && net.conn && !game) resetNetLobby(); // leaving the network panel without starting: drop the lobby connection
@@ -223,12 +227,12 @@
     document.getElementById('game-canvas').addEventListener('click', () => { if (game && !game.paused && !game.hud.buyOpen && !game.over) S3.Input.lock(); });
     S3.Input.onLockChange = (locked) => { if (!game) return; if (!locked && !game.hud.buyOpen && !game.paused && !game.over && !S3.Console.isOpen()) { pauseGame(); } };
     window.addEventListener('keydown', (e) => {
+      if (e.code === 'F11') { e.preventDefault(); toggleFullscreen(); return; }
       if (S3.Console.handleKey(e)) return;
       if (!game) { if (e.code === 'Escape') { if (S3.CasesUI.open) S3.CasesUI.closeModal(); else showPanel('panel-main'); } return; }
       if (game.hud.buyOpen) { if (game.hud.buyKey(e.code)) e.preventDefault(); return; }
       if (e.code === 'Escape' && game.paused && !game.over) { resumeGame(); return; }
       if (e.code === 'Escape' && !game.paused && !S3.Input.locked) { pauseGame(); return; }
-      if (e.code === 'F11') { e.preventDefault(); if (window.S3_DESKTOP) { fsOn = !fsOn; window.S3_DESKTOP.setFullscreen(fsOn); } else if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { }); else document.exitFullscreen(); }
       // radio menu (Z + number)
       if (e.code === 'KeyZ' && game.player.alive) { game.radioOpen = !game.radioOpen; game.hud.setHint(game.radioOpen ? 'Радио: ' + S3.RADIO.map((r) => r.key + '-' + r.text).join('  ') : ''); if (game.radioOpen) game.hud.hintT = -5; }
       else if (game.radioOpen && /^Digit[1-9]$/.test(e.code)) { const r = S3.RADIO.find((x) => x.key === e.code.slice(5)); if (r) { if (game.net && game.net.role === 'client') game.net.sendRadio(r.key); else game.radio(game.player, r.text); } game.radioOpen = false; game.hud.setHint(''); e.preventDefault(); }

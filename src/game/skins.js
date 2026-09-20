@@ -201,11 +201,24 @@
   const COUNT = { common: 3, uncommon: 3, rare: 2, epic: 2, legendary: 2, arcane: 1 };
   function pickN(list, n, rnd) { const a = list.slice(); const out = []; while (a.length && out.length < n) out.push(a.splice(Math.floor(rnd() * a.length), 1)[0]); return out; }
   for (const wid of skinnable) {
+    if (wid === 'knife') continue; // knives are handled below (type x finish)
     const rnd = S3.seededRandom(wid.split('').reduce((a, ch) => a * 33 + ch.charCodeAt(0), 11) >>> 0);
     for (const r of S3.RARITY_ORDER) {
       if (r === 'arcane' && !ARCANE_WEAPONS.includes(wid)) continue;
-      let n = COUNT[r]; if (wid === 'knife') n = Math.min(byRarity[r].length, n + 2);
-      for (const fid of pickN(byRarity[r], n, rnd)) { const id = wid + '_' + fid; SKINS[id] = { id, weapon: wid, finish: fid, rarity: r, name: S3.WEAPONS[wid].name + ' | ' + F[fid].name }; }
+      for (const fid of pickN(byRarity[r], COUNT[r], rnd)) { const id = wid + '_' + fid; SKINS[id] = { id, weapon: wid, finish: fid, rarity: r, name: S3.WEAPONS[wid].name + ' | ' + F[fid].name }; }
+    }
+  }
+  // Knives: every knife TYPE (karambit, butterfly, ...) is its own model and carries a rarity floor, the finish adds on top.
+  // The stock knife keeps the old ids (knife_<finish>) so inventories from earlier versions stay valid.
+  const rIdx = (r) => S3.RARITY_ORDER.indexOf(r);
+  for (const kt in S3.KNIFE_TYPES) {
+    const info = S3.KNIFE_TYPES[kt]; const rnd = S3.seededRandom(kt.split('').reduce((a, ch) => a * 37 + ch.charCodeAt(0), 5) >>> 0);
+    const per = kt === 'default' ? { common: 4, uncommon: 4, rare: 3, epic: 3, legendary: 3, arcane: 2 } : { common: 2, uncommon: 2, rare: 2, epic: 2, legendary: 2, arcane: 1 };
+    for (const r of S3.RARITY_ORDER) {
+      for (const fid of pickN(byRarity[r], per[r], rnd)) {
+        const id = kt === 'default' ? 'knife_' + fid : 'knife_' + kt + '_' + fid; const rar = S3.RARITY_ORDER[Math.max(rIdx(r), rIdx(info.rarity))];
+        SKINS[id] = { id, weapon: 'knife', knife: kt, finish: fid, rarity: rar, name: info.name + ' | ' + F[fid].name };
+      }
     }
   }
   S3.SKINS = SKINS;
@@ -217,7 +230,7 @@
     { id: 'starter', name: 'Кейс новичка', price: 250, color: '#7aa0c8', desc: 'Пистолеты, пистолеты-пулемёты и дробовики.', filter: TYPE(['pistol', 'smg', 'shotgun']) },
     { id: 'assault', name: 'Штурмовой кейс', price: 400, color: '#e0a040', desc: 'Штурмовые винтовки и пулемёт.', filter: TYPE(['rifle', 'mg']) },
     { id: 'sniper', name: 'Снайперский кейс', price: 400, color: '#60c890', desc: 'Снайперские винтовки, AUG и G3SG1.', filter: (s) => S3.WEAPONS[s.weapon].type === 'sniper' || s.weapon === 'aug' || s.weapon === 'g3sg1' },
-    { id: 'knife', name: 'Кейс ножей', price: 900, color: '#d060d0', desc: 'Только скины на нож — включая арканный Алмаз.', filter: (s) => s.weapon === 'knife' },
+    { id: 'knife', name: 'Кейс ножей', price: 900, color: '#d060d0', desc: 'Все виды ножей: керамбит, бабочка, байонет, боуи, кукри, танто, стилет, флип — и финиши на них.', filter: (s) => s.weapon === 'knife', weights: { common: 30, uncommon: 26, rare: 22, epic: 13, legendary: 7, arcane: 2 } },
     { id: 'gold', name: 'Золотой кейс', price: 1200, color: '#ffd24a', desc: 'Только редкие и выше. Повышенный шанс легендарных и арканных.', filter: (s) => S3.RARITY_ORDER.indexOf(s.rarity) >= 2, weights: { rare: 45, epic: 32, legendary: 18, arcane: 5 } },
   ];
   S3.caseContents = function (c) { return Object.values(SKINS).filter(c.filter).sort((a, b) => S3.RARITY_ORDER.indexOf(a.rarity) - S3.RARITY_ORDER.indexOf(b.rarity) || a.name.localeCompare(b.name)); };

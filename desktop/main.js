@@ -31,7 +31,7 @@ function createWindow() {
   });
   win.setMenuBarVisibility(false);
   ipcMain.handle('s3:config', () => cfg);
-  ipcMain.on('s3:fullscreen', (e, on) => win.setFullScreen(!!on));
+  ipcMain.on('s3:fullscreen', (e, on) => win.setFullScreen(on === undefined || on === null ? !win.isFullScreen() : !!on));
   ipcMain.on('s3:quit', () => app.quit());
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
   win.loadFile(path.join(__dirname, 'index.html'));

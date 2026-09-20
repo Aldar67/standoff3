@@ -4,6 +4,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('S3_DESKTOP', {
   platform: process.platform,
   getConfig: () => ipcRenderer.invoke('s3:config'),
-  setFullscreen: (on) => ipcRenderer.send('s3:fullscreen', on),
+  setFullscreen: (on) => ipcRenderer.send('s3:fullscreen', on === undefined ? null : on),
   quit: () => ipcRenderer.send('s3:quit'),
 });

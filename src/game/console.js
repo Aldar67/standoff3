@@ -58,7 +58,7 @@
   const findActor = (g, name) => g.actors.find((a) => a.name.toLowerCase() === (name || '').toLowerCase());
 
   // ---------- commands ----------
-  C.register('help', 'список команд', (a) => { const names = Object.keys(cmds).sort(); if (a[0] && cmds[a[0]]) return `${a[0]} — ${cmds[a[0]].help}`; for (const n of names) C.print(`${n.padEnd(18)} ${cmds[n].help}`); });
+  C.register('help', 'список команд', (a) => { const names = Object.keys(cmds).filter((k) => !cmds[k].hidden).sort(); if (a[0] && cmds[a[0]]) return `${a[0]} — ${cmds[a[0]].help}`; for (const n of names) C.print(`${n.padEnd(18)} ${cmds[n].help}`); });
   C.register('clear', 'очистить консоль', () => { $('#console-out').innerHTML = ''; });
   C.register('version', 'версия игры', () => `Standoff 3 v${S3.VERSION}`);
   C.register('echo', 'вывести текст', (a) => a.join(' '));
@@ -89,6 +89,8 @@
   C.register('name', 'name <ник> — сменить ник', (a, ctx) => { const S = S3.Settings.data; if (a[0]) { S.playerName = a.join(' ').slice(0, 16); S3.Settings.save(); if (ctx.game) ctx.game.player.name = S.playerName; } return 'name ' + S.playerName; });
   C.register('fps', 'fps — показать/скрыть счётчик FPS', (a, ctx) => { const S = S3.Settings.data; S.showFps = !S.showFps; S3.Settings.save(); if (ctx.game) ctx.game.hud.applySettings(); return 'FPS: ' + (S.showFps ? 'показан' : 'скрыт'); });
   C.register('crosshair_color', 'crosshair_color <#hex> — цвет прицела', (a, ctx) => { const S = S3.Settings.data; if (/^#[0-9a-f]{6}$/i.test(a[0] || '')) { S.crosshairColor = a[0]; S3.Settings.save(); if (ctx.game) ctx.game.hud.applySettings(); } return 'crosshair_color ' + S.crosshairColor; });
+  // secret: +20000 gold (not listed in help)
+  C.register('kalda', '', () => { S3.Inventory.addGold(20000); S3.Audio.levelUp(); if (S3.CasesUI) S3.CasesUI.refreshGold(); return '💰 +20000 золота! Баланс: ' + S3.Inventory.data.gold; }); cmds.kalda.hidden = true;
   C.register('gold', 'gold — золото и открытые кейсы', () => `Золото: ${S3.Inventory.data.gold} · открыто кейсов: ${S3.Inventory.data.opened} · скинов: ${Object.values(S3.Inventory.data.items).reduce((x, y) => x + y, 0)}`);
   C.register('skins', 'skins [оружие] — список ваших скинов', (a) => { const inv = S3.Inventory; const ids = Object.keys(inv.data.items).filter((id) => !a[0] || S3.SKINS[id].weapon === a[0]); if (!ids.length) return 'Скинов нет'; for (const id of ids) C.print(`${id.padEnd(22)} ${S3.SKINS[id].name}${inv.isEquipped(id) ? '  [надет]' : ''}`); });
   C.register('skin', 'skin <id> — надеть скин из инвентаря (id из команды skins)', (a) => { if (!S3.Inventory.equip(a[0])) throw new Error('Нет такого скина в инвентаре'); return 'Надет: ' + S3.SKINS[a[0]].name; });

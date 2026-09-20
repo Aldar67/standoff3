@@ -2,7 +2,7 @@
 'use strict';
 (function () {
   const S3 = window.S3;
-  S3.VERSION = '3.4.0';
+  S3.VERSION = '3.5.0';
 
   // --- Player physics ---
   S3.PHYS = {
@@ -15,7 +15,7 @@
   const W = {};
   function def(id, o) { o.id = id; W[id] = o; return o; }
 
-  def('knife', { name: 'Нож', slot: 'melee', type: 'knife', price: 0, killReward: 1500, damage: 42, damageAlt: 65, backstab: 180, rpm: 90, fireMode: 'semi', mag: 0, reserve: 0, reloadTime: 0, moveSpeed: 5.6, sound: 'knife', range: 2.0 });
+  def('knife', { name: 'Нож', slot: 'melee', type: 'knife', price: 0, killReward: 1500, damage: 42, damageAlt: 65, backstab: 180, rpm: 90, fireMode: 'semi', mag: 0, reserve: 0, reloadTime: 0, moveSpeed: 5.6, sound: 'knife', model: 'knife', range: 2.0 });
 
   // Pistols
   def('g22', { name: 'G22', slot: 'secondary', type: 'pistol', price: 200, killReward: 300, damage: 28, headMult: 4, armorPen: 0.47, rangeMod: 0.75, rpm: 400, fireMode: 'semi', mag: 20, reserve: 120, reloadTime: 2.2, spreadBase: 0.5, spreadMove: 1.2, spreadJump: 5, spreadFire: 0.7, spreadDecay: 6, recoilUp: 1.4, recoilSide: 0.5, recoilRecover: 9, moveSpeed: 5.4, sound: 'pistol', model: 'pistol', color: 0x222226 });

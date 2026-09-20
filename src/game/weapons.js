@@ -106,10 +106,9 @@
         muzzle = new THREE.Vector3(0, 0.05, -0.72); break;
       }
       case 'knife': {
-        P(g, 0.025, 0.12, 0.03, BLACK, 0, -0.04, 0); g.children[0].rotation.x = -0.2; // handle
-        const blade = P(g, 0.005, 0.03, 0.16, STEEL, 0, 0.03, -0.1); blade.material = M(0xc0c4c8, { metalness: 0.9, roughness: 0.25 });
-        P(g, 0.03, 0.01, 0.03, STEEL, 0, 0.025, 0.0);
-        muzzle = new THREE.Vector3(0, 0.03, -0.2); break;
+        // the knife type (karambit, butterfly, ...) comes from the equipped skin; stock knife otherwise
+        const kt = (skinId && S3.SKINS && S3.SKINS[skinId] && S3.SKINS[skinId].knife) || 'default';
+        muzzle = S3.buildKnifeModel(g, kt); break;
       }
       case 'he': case 'flash': case 'smoke': {
         const col = w.model === 'he' ? 0x3a4a3a : (w.model === 'flash' ? 0x5a5a62 : 0x6a6a6a);
@@ -256,7 +255,7 @@
       this.weaponId = id; this.skinId = skinId || null; const w = S3.WEAPONS[id]; this.model = S3.buildWeaponModel(w, 1, skinId); this.weaponGroup.add(this.model);
       // per-type placement
       const t = w.type;
-      if (t === 'pistol') this.basePos.set(0.16, -0.19, -0.38); else if (t === 'knife') this.basePos.set(0.2, -0.2, -0.3); else if (t === 'grenade') this.basePos.set(0.18, -0.2, -0.32); else if (t === 'bomb') this.basePos.set(0.14, -0.22, -0.34);
+      if (t === 'pistol') this.basePos.set(0.16, -0.19, -0.38); else if (t === 'knife') { this.basePos.set(0.17, -0.09, -0.3); this.model.rotation.set(0.2, 0.4, 0.05); this.model.scale.setScalar(1.15); } // tip angled toward the screen centre else if (t === 'grenade') this.basePos.set(0.18, -0.2, -0.32); else if (t === 'bomb') this.basePos.set(0.14, -0.22, -0.34);
       else if (t === 'sniper') this.basePos.set(0.17, -0.2, -0.36); else this.basePos.set(0.19, -0.21, -0.4);
       this.armL.visible = t !== 'pistol' && t !== 'knife' && t !== 'grenade';
       this.armL.position.set(t === 'sniper' || t === 'rifle' || t === 'mg' || t === 'shotgun' ? -0.12 : -0.14, -0.06, t === 'sniper' ? -0.1 : -0.05);
