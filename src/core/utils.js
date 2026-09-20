@@ -140,3 +140,48 @@ S3.Stats = {
   load() { try { const s = localStorage.getItem('standoff3_stats'); if (s) Object.assign(this.data, JSON.parse(s)); } catch (e) { } return this.data; },
   save() { try { localStorage.setItem('standoff3_stats', JSON.stringify(this.data)); } catch (e) { } },
 };
+
+// ---- static mesh merging (draw-call reduction) ----
+// Merges `meshes` (children of `parent`, all sharing `material`) into ONE mesh under `parent`. Each source mesh's
+// geometry is baked with its local transform; when `useVertexColors` the source material's color is written into a
+// per-vertex color attribute so a single vertexColors material can replace many flat-colored ones.
+S3.mergeMeshes = function (parent, meshes, material, useVertexColors) {
+  if (!meshes.length) return null;
+  let total = 0, totalIdx = 0; const hasUv = meshes.every((m) => m.geometry.attributes.uv);
+  for (const m of meshes) { const g = m.geometry; total += g.attributes.position.count; totalIdx += g.index ? g.index.count : g.attributes.position.count; }
+  const pos = new Float32Array(total * 3), nor = new Float32Array(total * 3), uv = hasUv ? new Float32Array(total * 2) : null, col = useVertexColors ? new Float32Array(total * 3) : null;
+  const idx = total > 65535 ? new Uint32Array(totalIdx) : new Uint16Array(totalIdx);
+  let vo = 0, io = 0; const v = new THREE.Vector3(); const nm = new THREE.Matrix3(); const c = new THREE.Color();
+  for (const m of meshes) {
+    m.updateMatrix(); const g = m.geometry; const p = g.attributes.position, n = g.attributes.normal, u = g.attributes.uv; const cnt = p.count;
+    nm.getNormalMatrix(m.matrix); if (useVertexColors) c.copy(m.material.color);
+    for (let i = 0; i < cnt; i++) {
+      v.fromBufferAttribute(p, i).applyMatrix4(m.matrix); pos[(vo + i) * 3] = v.x; pos[(vo + i) * 3 + 1] = v.y; pos[(vo + i) * 3 + 2] = v.z;
+      v.fromBufferAttribute(n, i).applyMatrix3(nm).normalize(); nor[(vo + i) * 3] = v.x; nor[(vo + i) * 3 + 1] = v.y; nor[(vo + i) * 3 + 2] = v.z;
+      if (uv) { uv[(vo + i) * 2] = u.getX(i); uv[(vo + i) * 2 + 1] = u.getY(i); }
+      if (col) { col[(vo + i) * 3] = c.r; col[(vo + i) * 3 + 1] = c.g; col[(vo + i) * 3 + 2] = c.b; }
+    }
+    if (g.index) { for (let i = 0; i < g.index.count; i++) idx[io + i] = g.index.getX(i) + vo; io += g.index.count; }
+    else { for (let i = 0; i < cnt; i++) idx[io + i] = vo + i; io += cnt; }
+    vo += cnt; parent.remove(m);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  if (uv) geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); if (col) geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1)); geo.computeBoundingSphere();
+  const mesh = new THREE.Mesh(geo, material); mesh.castShadow = meshes.some((m) => m.castShadow); mesh.receiveShadow = meshes.some((m) => m.receiveShadow);
+  parent.add(mesh); return mesh;
+};
+// Merges every mesh in `group` (recursively, static) into one mesh per material. Transparent materials are left alone.
+S3.mergeStaticGroup = function (group) {
+  group.updateMatrixWorld(true); const byMat = new Map(); const rest = [];
+  group.traverse((o) => { if (o.isMesh && !o.material.transparent) { if (!byMat.has(o.material)) byMat.set(o.material, []); byMat.get(o.material).push(o); } else if (o !== group && o.isMesh) rest.push(o); });
+  const out = new THREE.Group(); out.name = group.name;
+  for (const [mat, meshes] of byMat) {
+    // bake the world transform: temporarily re-parent under a neutral group
+    const tmp = new THREE.Group(); for (const m of meshes) { m.matrix.copy(m.matrixWorld); m.matrix.decompose(m.position, m.quaternion, m.scale); tmp.add(m); }
+    S3.mergeMeshes(tmp, meshes, mat, false); out.add(tmp.children[0]);
+  }
+  for (const m of rest) { m.matrixWorld.decompose(m.position, m.quaternion, m.scale); out.add(m); }
+  return out;
+};

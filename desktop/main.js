@@ -16,6 +16,8 @@ function loadConfig() {
 }
 
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
+// laptops with two GPUs: Chromium otherwise picks the integrated one (Intel UHD instead of the GeForce next to it)
+app.commandLine.appendSwitch('force_high_performance_gpu');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 function createWindow() {

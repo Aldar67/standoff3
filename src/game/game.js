@@ -24,7 +24,9 @@
       const canvas = document.getElementById('game-canvas'); this.canvas = canvas;
       const renderer = new THREE.WebGLRenderer({ canvas, antialias: S.quality !== 'low', powerPreference: 'high-performance' });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5) * (S.resScale || 1)); renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.shadowMap.enabled = !!S.shadows; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.autoClear = false;
+      renderer.shadowMap.enabled = !!S.shadows; renderer.shadowMap.type = S.quality === 'high' ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+      renderer.shadowMap.autoUpdate = false; // shadow pass every 2nd frame (see render()) -- halves shadow draw calls, invisible in play
+      renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.autoClear = false;
       this.renderer = renderer;
       this.scene = new THREE.Scene(); this.camera = new THREE.PerspectiveCamera(S.fov, window.innerWidth / window.innerHeight, 0.05, 600);
       // map
@@ -36,7 +38,7 @@
       const sun = new THREE.DirectionalLight(theme.sunColor, theme.sunI); const sd = new V3(...theme.sunDir).normalize(); sun.position.copy(sd).multiplyScalar(120); sun.castShadow = !!S.shadows;
       const b = this.map.bounds; const ext = Math.max(b.xmax - b.xmin, b.zmax - b.zmin) * 0.55;
       sun.shadow.camera.left = -ext; sun.shadow.camera.right = ext; sun.shadow.camera.top = ext; sun.shadow.camera.bottom = -ext; sun.shadow.camera.near = 10; sun.shadow.camera.far = 320;
-      sun.shadow.mapSize.set(S.quality === 'high' ? 4096 : 2048, S.quality === 'high' ? 4096 : 2048); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
+      const smap = S.quality === 'high' ? 4096 : (S.quality === 'medium' ? 2048 : 1024); sun.shadow.mapSize.set(smap, smap); sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
       sun.target.position.set((b.xmin + b.xmax) / 2, 0, (b.zmin + b.zmax) / 2); this.scene.add(sun); this.scene.add(sun.target); this.sun = sun;
       sun.position.copy(sun.target.position).addScaledVector(sd, 150);
       this.hemi = new THREE.HemisphereLight(theme.hemiSky, theme.hemiGround, theme.hemiI); this.scene.add(this.hemi);
@@ -430,7 +432,7 @@
       if (p.alive && this.hud.hint.style.display === 'block') { this.hud.hintT = (this.hud.hintT || 0) + dt; if (this.hud.hintT > 0.3) { this.hud.setHint(''); this.hud.hintT = 0; } }
     }
     render(dt) {
-      const r = this.renderer; r.clear();
+      const r = this.renderer; r.clear(); this.frameNo = (this.frameNo || 0) + 1; if (r.shadowMap.enabled) r.shadowMap.needsUpdate = this.frameNo % 2 === 0;
       // while spectating from a teammate's eyes, hide their own body so it doesn't fill the view
       const spec = this.player.spectating; const specModel = spec && spec.model ? spec.model.root : null; const specVis = specModel ? specModel.visible : false; if (specModel) specModel.visible = false;
       r.render(this.scene, this.camera); if (specModel) specModel.visible = specVis;

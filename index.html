@@ -13,7 +13,9 @@
 
 <div id="menu">
   <div class="menu-bg"></div>
-  <div class="logo"><span class="logo-a">STANDOFF</span><span class="logo-b">3</span><div class="logo-sub">PC EDITION · v3.6</div></div>
+  <canvas id="menu-canvas"></canvas>
+  <div id="menu-side">
+  <div class="logo"><span class="logo-a">STANDOFF</span><span class="logo-b">3</span><div class="logo-sub">PC EDITION · v3.7</div></div>
   <div id="panel-main" class="panel">
     <button class="mbtn big hover-snd" data-panel="panel-play">▶ Играть</button>
     <button class="mbtn hover-snd" data-panel="panel-network">🌐 Игра по сети</button>
@@ -24,8 +26,11 @@
     <button class="mbtn hover-snd" data-panel="panel-about">Об игре</button>
     <button id="btn-fullscreen" class="mbtn hover-snd">⛶ Полный экран (F11)</button>
     <button id="btn-quit-app" class="mbtn hover-snd" style="display:none">Выйти из игры</button>
+    <div id="side-profile" class="side-profile"></div>
     <div id="menu-version" class="version"></div>
   </div>
+  </div>
+  <div id="menu-content">
 
   <div id="panel-play" class="panel wide">
     <div class="panel-title">Новый матч <button class="back hover-snd" data-panel="panel-main">← Назад</button></div>
@@ -166,6 +171,7 @@
       <p class="dim">Советы: играйте в полноэкранном режиме (F11). Если курсор «выпадает», кликните по экрану. Настройки и статистика сохраняются в браузере.</p>
     </div>
   </div>
+  </div>
 </div>
 
 <div id="console" style="display:none"><div class="con-box"><div id="console-out" class="con-out"></div><div class="con-row"><span class="con-prompt">&gt;</span><input id="console-input" type="text" autocomplete="off" spellcheck="false" placeholder="help — список команд · ` закрыть"></div></div></div>
@@ -227,6 +233,7 @@
 <script src="src/net/clientsync.js"></script>
 <script src="src/game/game.js"></script>
 <script src="src/game/cases.js"></script>
+<script src="src/game/menuscene.js"></script>
 <script src="src/game/console.js"></script>
 <script src="src/maps/sandstone.js"></script>
 <script src="src/maps/rust.js"></script>

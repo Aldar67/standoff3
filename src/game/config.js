@@ -2,7 +2,7 @@
 'use strict';
 (function () {
   const S3 = window.S3;
-  S3.VERSION = '3.6.0';
+  S3.VERSION = '3.7.0';
 
   // --- Player physics ---
   S3.PHYS = {

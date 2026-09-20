@@ -134,13 +134,13 @@
     const eqb = $('#btn-sm-equip'); eqb.style.display = cnt ? '' : 'none'; eqb.textContent = eq ? 'Снять' : 'Экипировать';
     const sell = $('#btn-sm-sell'); sell.style.display = cnt ? '' : 'none'; sell.innerHTML = `Продать за ${R[s.rarity].sell} 🪙`;
   }
-  function closeModal() { $('#skin-modal').style.display = 'none'; if (ui.preview) ui.preview.stop(); ui.modalSkin = null; if (ui.tab === 'inv') renderInventory(); else renderCases(); }
+  function closeModal() { $('#skin-modal').style.display = 'none'; if (ui.preview) ui.preview.stop(); ui.modalSkin = null; if (ui.tab === 'inv') renderInventory(); else renderCases(); if (S3.CasesUI.onChange) S3.CasesUI.onChange(); }
 
   function bind() {
     $$('[data-ctab]').forEach((t) => t.addEventListener('click', () => switchTab(t.dataset.ctab)));
     $('#btn-open-case').addEventListener('click', openCase);
     $('#btn-sm-close').addEventListener('click', closeModal);
-    $('#btn-sm-equip').addEventListener('click', () => { const s = S3.SKINS[ui.modalSkin]; if (S3.Inventory.isEquipped(s.id)) S3.Inventory.unequip(s.weapon); else S3.Inventory.equip(s.id); S3.Audio.armorEquip(); updateModalButtons(); });
+    $('#btn-sm-equip').addEventListener('click', () => { const s = S3.SKINS[ui.modalSkin]; if (S3.Inventory.isEquipped(s.id)) S3.Inventory.unequip(s.weapon); else S3.Inventory.equip(s.id); S3.Audio.armorEquip(); updateModalButtons(); if (S3.CasesUI.onChange) S3.CasesUI.onChange(); });
     $('#btn-sm-sell').addEventListener('click', () => { const s = S3.SKINS[ui.modalSkin]; if (!confirm(`Продать ${s.name} за ${R[s.rarity].sell} золота?`)) return; S3.Inventory.sell(s.id); S3.Audio.buy(); refreshGold(); if (!S3.Inventory.count(s.id)) closeModal(); else updateModalButtons(); });
     $('#skin-modal').addEventListener('click', (e) => { if (e.target.id === 'skin-modal') closeModal(); });
   }

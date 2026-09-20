@@ -21,7 +21,8 @@
     mesh.position.set(x, y + h / 2, z); mesh.rotation.y = ry || 0; mesh.castShadow = !!shadow; mesh.receiveShadow = true; group.add(mesh); return mesh;
   }
   function cyl(group, r0, r1, h, m, x, y, z, seg) { const mesh = new THREE.Mesh(new THREE.CylinderGeometry(r0, r1, h, seg || 10), m); mesh.position.set(x, y + h / 2, z); mesh.castShadow = true; group.add(mesh); return mesh; }
-  function plain(color, rough) { return new THREE.MeshStandardMaterial({ color, roughness: rough !== undefined ? rough : 0.9, metalness: 0 }); }
+  const plainCache = {};
+  function plain(color, rough) { const k = color + '|' + rough; if (!plainCache[k]) plainCache[k] = new THREE.MeshStandardMaterial({ color, roughness: rough !== undefined ? rough : 0.9, metalness: 0 }); return plainCache[k]; }
 
   function cloudTexture(rnd) {
     const c = document.createElement('canvas'); c.width = 256; c.height = 128; const ctx = c.getContext('2d');
@@ -119,6 +120,8 @@
     // clouds: a few soft billboards high up
     const ct = cloudTexture(rnd);
     for (let i = 0; i < 9; i++) { const cm = new THREE.MeshBasicMaterial({ map: ct, transparent: true, opacity: 0.55 + rnd() * 0.3, depthWrite: false, fog: false }); const cl = new THREE.Mesh(new THREE.PlaneGeometry(90 + rnd() * 80, 45 + rnd() * 40), cm); const a = rnd() * Math.PI * 2, r = 120 + rnd() * 220; cl.position.set(cx + Math.cos(a) * r, 95 + rnd() * 60, cz + Math.sin(a) * r); cl.rotation.x = -Math.PI / 2 + 0.25; cl.rotation.z = rnd() * 6; g.add(cl); }
-    scene.add(g); return g;
+    // hundreds of little props -> one mesh per material (clouds/smoke stay separate: transparent)
+    const merged = S3.mergeStaticGroup(g); merged.name = 'scenery';
+    scene.add(merged); return merged;
   };
 })();

@@ -7,6 +7,9 @@
     const key = color + '|' + JSON.stringify(opts || {}); if (matCache[key]) return matCache[key];
     const m = new THREE.MeshStandardMaterial(Object.assign({ color, roughness: 0.85, metalness: 0.05 }, opts || {})); matCache[key] = m; return m;
   }
+  // one shared vertex-colored material for every character: after construction each rigid segment (torso, head,
+  // upper arm, forearm, thigh, shin) is merged into a single mesh, so a character costs ~10 draw calls instead of ~30
+  const VC_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.05 });
   function box(w, h, d, m, x, y, z) { const g = new THREE.BoxGeometry(w, h, d); const mesh = new THREE.Mesh(g, m); mesh.position.set(x || 0, y || 0, z || 0); mesh.castShadow = true; mesh.receiveShadow = true; return mesh; }
 
   const SKINS = {
@@ -69,6 +72,9 @@
       this.armL.add(box(0.16, 0.06, 0.17, mat(sk.accent), 0, -0.1, 0));
       this.animT = Math.random() * 10; this.dead = false; this.crouch = 0; this.aimPitch = 0;
       root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      for (const seg of [this.torso, this.neck, this.armL, this.armR, this.armL.fore, this.armR.fore, this.legL, this.legR, this.legL.shin, this.legR.shin]) {
+        const merged = S3.mergeMeshes(seg, seg.children.filter((c) => c.isMesh), VC_MAT, true); if (seg === this.neck) this.headMesh = merged;
+      }
       this.deathT = 0; this.bobPhase = 0;
     }
     setWeapon(id, skinId) {

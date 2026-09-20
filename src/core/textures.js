@@ -308,8 +308,9 @@
     if (matCache[name]) return matCache[name];
     const d = MATS[name] || MATS.concrete;
     const t = S3.getTexture(d.tex);
+    const lowQ = S3.Settings && S3.Settings.data && S3.Settings.data.quality === 'low'; // low: skip bump maps (per-pixel cost)
     const m = new THREE.MeshStandardMaterial({
-      map: t.map, bumpMap: t.bump, bumpScale: d.bump || 0, roughness: d.rough !== undefined ? d.rough : 0.9, metalness: d.metal !== undefined ? d.metal : 0,
+      map: t.map, bumpMap: lowQ ? null : t.bump, bumpScale: lowQ ? 0 : (d.bump || 0), roughness: d.rough !== undefined ? d.rough : 0.9, metalness: d.metal !== undefined ? d.metal : 0,
       color: d.color !== undefined ? d.color : 0xffffff,
     });
     m.userData.scale = d.scale || 2; m.userData.perBox = !!d.perBox;

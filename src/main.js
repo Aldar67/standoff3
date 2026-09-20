@@ -26,13 +26,20 @@
     previews[id] = c.toDataURL(); return previews[id];
   }
 
-  function showPanel(id) { $$('.panel').forEach((p) => p.classList.toggle('show', p.id === id)); S3.Audio.uiClick(); }
+  // panel-main is the always-visible navigation column; every other panel opens in the content area next to it
+  function showPanel(id) { $$('.panel').forEach((p) => { if (p.id === 'panel-main') return; p.classList.toggle('show', p.id === id); }); S3.Audio.uiClick(); }
+  function menuSceneRefresh() {
+    const S = S3.Settings.data; const inv = S3.Inventory;
+    S3.MenuScene.refresh({ team: state.team === 'random' ? 'CT' : state.team, weapons: [state.primary, state.secondary, 'knife'], skins: inv.equippedMap() });
+    const n = Object.values(inv.data.items).reduce((a, b) => a + b, 0); const st = S3.Stats.data;
+    $('#side-profile').innerHTML = `<b>${S.playerName || 'Игрок'}</b> · ${S3.TEAM_NAME[state.team === 'random' ? 'CT' : state.team]}<br><span class="gold">🪙 ${inv.data.gold}</span> · скинов: ${n}<br>матчей: ${st.matches} · побед: ${st.wins} · K/D ${st.deaths ? (st.kills / st.deaths).toFixed(2) : st.kills}`;
+  }
   function renderPlay() {
     const modes = $('#mode-list'); modes.innerHTML = Object.keys(S3.MODES).map((m) => `<div class="card mode ${state.mode === m ? 'sel' : ''}" data-mode="${m}"><div class="card-title">${S3.MODES[m].name}</div><div class="card-desc">${S3.MODES[m].desc}</div></div>`).join('');
     modes.querySelectorAll('.card').forEach((c) => c.addEventListener('click', () => { state.mode = c.dataset.mode; const m = MAP_LIST.find((x) => x.id === state.map); if (!m.modes.includes(state.mode)) state.map = MAP_LIST.find((x) => x.modes.includes(state.mode)).id; renderPlay(); S3.Audio.uiClick(); }));
     const maps = $('#map-list'); maps.innerHTML = MAP_LIST.map((m) => { const ok = m.modes.includes(state.mode); return `<div class="card map ${state.map === m.id ? 'sel' : ''} ${ok ? '' : 'dis'}" data-map="${m.id}"><img src="${mapPreview(m.id)}" alt=""><div class="card-title">${m.title}</div><div class="card-desc">${m.desc}</div></div>`; }).join('');
     maps.querySelectorAll('.card').forEach((c) => c.addEventListener('click', () => { if (c.classList.contains('dis')) return; state.map = c.dataset.map; renderPlay(); S3.Audio.uiClick(); }));
-    $$('#team-sel .opt').forEach((o) => { o.classList.toggle('sel', o.dataset.team === state.team); o.onclick = () => { state.team = o.dataset.team; renderPlay(); S3.Audio.uiClick(); }; });
+    $$('#team-sel .opt').forEach((o) => { o.classList.toggle('sel', o.dataset.team === state.team); o.onclick = () => { state.team = o.dataset.team; renderPlay(); menuSceneRefresh(); S3.Audio.uiClick(); }; });
     $$('#diff-sel .opt').forEach((o) => { o.classList.toggle('sel', o.dataset.diff === state.difficulty); o.onclick = () => { state.difficulty = o.dataset.diff; renderPlay(); S3.Audio.uiClick(); }; });
     $('#bots-range').value = state.bots; $('#bots-val').textContent = state.bots + ' на команду';
     $('#rounds-row').style.display = state.mode === 'defuse' ? 'flex' : 'none'; $('#kills-row').style.display = (state.mode === 'tdm' || state.mode === 'ffa') ? 'flex' : 'none'; $('#loadout-row').style.display = (state.mode === 'tdm' || state.mode === 'ffa') ? 'flex' : 'none';
@@ -40,7 +47,7 @@
     $$('#kills-sel .opt').forEach((o) => { o.classList.toggle('sel', +o.dataset.k === state.killLimit); o.onclick = () => { state.killLimit = +o.dataset.k; renderPlay(); }; });
     const prim = $('#loadout-primary'), sec = $('#loadout-secondary');
     if (!prim.options.length) { for (const cat of S3.BUY_CATEGORIES.slice(1, 5)) for (const id of cat.ids) { const o = document.createElement('option'); o.value = id; o.textContent = S3.WEAPONS[id].name; prim.appendChild(o); } for (const id of S3.BUY_CATEGORIES[0].ids) { const o = document.createElement('option'); o.value = id; o.textContent = S3.WEAPONS[id].name; sec.appendChild(o); } }
-    prim.value = state.primary; sec.value = state.secondary; prim.onchange = () => state.primary = prim.value; sec.onchange = () => state.secondary = sec.value;
+    prim.value = state.primary; sec.value = state.secondary; prim.onchange = () => { state.primary = prim.value; menuSceneRefresh(); }; sec.onchange = () => { state.secondary = sec.value; menuSceneRefresh(); };
   }
   function renderSettings() {
     const S = S3.Settings.data; const f = $('#settings-form');
@@ -74,7 +81,7 @@
   // ---- game lifecycle ----
   function startGame(extra) {
     S3.Audio.init(); S3.Audio.resume(); S3.Audio.stopMenuMusic();
-    $('#menu').style.display = 'none'; $('#hud').style.display = 'block'; $('#loading').style.display = 'flex';
+    S3.MenuScene.stop(); $('#menu').style.display = 'none'; $('#hud').style.display = 'block'; $('#loading').style.display = 'flex';
     setTimeout(() => {
       try {
         const opts = Object.assign({ map: state.map, mode: state.mode, playerTeam: state.team, botsPerTeam: state.bots, difficulty: state.difficulty, rounds: state.rounds, killLimit: state.killLimit, loadout: { primary: state.primary, secondary: state.secondary } }, extra || {});
@@ -94,6 +101,7 @@
     if (game) { game.destroy(); game = null; window.game = null; }
     resetNetLobby();
     $('#pause').style.display = 'none'; $('#matchover').style.display = 'none'; $('#hud').style.display = 'none'; $('#menu').style.display = 'flex'; showPanel('panel-main'); S3.Audio.startMenuMusic();
+    menuSceneRefresh(); S3.MenuScene.resize(); S3.MenuScene.start();
   }
   function resetNetLobby() {
     if (net.conn) { net.conn.close(); net.conn = null; } net.role = null; net.players = [];
@@ -228,9 +236,9 @@
       if (id === 'panel-play') renderPlay(); if (id === 'panel-settings') renderSettings(); if (id === 'panel-stats') renderStats();
       if (id === 'panel-network') { $('#net-host-name').value = S3.Settings.data.playerName || 'Игрок'; $('#net-join-name').value = S3.Settings.data.playerName || 'Игрок'; }
       if (id === 'panel-cases') S3.CasesUI.show();
-      showPanel(id);
+      showPanel(id); menuSceneRefresh();
     }));
-    bindNetworkMenu(); S3.CasesUI.bind();
+    bindNetworkMenu(); S3.CasesUI.bind(); S3.CasesUI.onChange = menuSceneRefresh;
     $('#btn-start').addEventListener('click', () => startGame());
     $('#bots-range').addEventListener('input', (e) => { state.bots = +e.target.value; $('#bots-val').textContent = state.bots + ' на команду'; });
     $('#settings-form').addEventListener('input', applySettingsFromForm); $('#settings-form').addEventListener('change', applySettingsFromForm);
@@ -258,6 +266,7 @@
   }
   function init() {
     S3.Settings.load(); S3.Stats.load(); S3.Inventory.load(); bindMenu(); bindDesktop();
+    try { S3.MenuScene.init($('#menu-canvas')); menuSceneRefresh(); S3.MenuScene.start(); } catch (e) { console.error('menu scene', e); }
     S3.Console.bind({
       getGame: () => game, quitToMenu,
       startMap: (map, mode) => { if (game) quitToMenu(); state.map = map; if (mode && S3.MODES[mode]) state.mode = mode; startGame(); },
