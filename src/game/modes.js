@@ -168,7 +168,7 @@
       this.startRound(false);
     }
     swapSides() {
-      const g = this.game; for (const a of g.actors) { a.team = a.team === 'CT' ? 'T' : 'CT'; a.money = E.startMoney; a.resetInventory(); a.armor = 0; a.helmet = false; a.defuser = false; a.alive = false; if (a.isBot) { g.scene.remove(a.model.root); a.model = new S3.CharacterModel(a.team, a.skinIdx); g.scene.add(a.model.root); a.onWeaponChange = (w) => a.model.setWeapon(w.id); } }
+      const g = this.game; for (const a of g.actors) { a.team = a.team === 'CT' ? 'T' : 'CT'; a.money = E.startMoney; a.resetInventory(); a.armor = 0; a.helmet = false; a.defuser = false; a.alive = false; if (a.isBot) { g.scene.remove(a.model.root); a.model = new S3.CharacterModel(a.team, a.skinIdx); g.scene.add(a.model.root); a.onWeaponChange = (w) => a.model.setWeapon(w.id, w.skin); a.model.setWeapon(a.current.id, a.current.skin); } }
       const s = this.score.CT; this.score.CT = this.score.T; this.score.T = s; this.lossStreak = { CT: 0, T: 0 };
       g.vm.buildArms(g.player.team); g.hud.showBanner('Смена сторон', `Вы теперь за ${S3.TEAM_NAME[g.player.team]}`, 4, '#ffd060');
       g.hud.addChat('<span class="sys">Смена сторон! Деньги сброшены.</span>');

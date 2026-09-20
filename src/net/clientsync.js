@@ -66,7 +66,7 @@
         p.name = entry.name; p.team = entry.team; p.health = entry.hp; p.armor = entry.armor; p.helmet = entry.helmet; p.alive = entry.alive;
         p.kills = entry.kills; p.deaths = entry.deaths; p.assists = entry.assists; p.score = entry.score; p.money = entry.money; p.level = entry.level;
         p.hasBomb = entry.hasBomb; p.defuser = entry.defuser; p.firing = entry.firing ? 0.12 : 0; p.scoped = entry.scoped; p.crouchAmt = entry.crouch;
-        if (!p.current || p.current.id !== entry.wid) { const def = S3.WEAPONS[entry.wid]; if (def) { p.current = { id: entry.wid, def, ammo: entry.ammo, reserve: entry.reserve, count: entry.gcount, isGun: def.type !== 'knife' && def.type !== 'grenade' && def.type !== 'bomb', reloading: entry.reloading }; if (p.model) p.model.setWeapon(entry.wid); } }
+        if (!p.current || p.current.id !== entry.wid || p.current.skin !== (entry.ws || null)) { const def = S3.WEAPONS[entry.wid]; if (def) { p.current = { id: entry.wid, def, skin: entry.ws || null, ammo: entry.ammo, reserve: entry.reserve, count: entry.gcount, isGun: def.type !== 'knife' && def.type !== 'grenade' && def.type !== 'bomb', reloading: entry.reloading }; if (p.model) p.model.setWeapon(entry.wid, entry.ws || null); } }
         else { p.current.ammo = entry.ammo; p.current.reserve = entry.reserve; p.current.count = entry.gcount; p.current.reloading = entry.reloading; }
         if (!p.targetPos) p.targetPos = new THREE.Vector3();
         p.targetPos.set(entry.x, entry.y, entry.z); p.targetYaw = entry.yaw; p.targetPitch = entry.pitch;

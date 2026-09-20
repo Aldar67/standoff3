@@ -13,10 +13,11 @@
 
 <div id="menu">
   <div class="menu-bg"></div>
-  <div class="logo"><span class="logo-a">STANDOFF</span><span class="logo-b">3</span><div class="logo-sub">PC EDITION · BOTS</div></div>
+  <div class="logo"><span class="logo-a">STANDOFF</span><span class="logo-b">3</span><div class="logo-sub">PC EDITION · v3.2</div></div>
   <div id="panel-main" class="panel">
     <button class="mbtn big hover-snd" data-panel="panel-play">▶ Играть</button>
     <button class="mbtn hover-snd" data-panel="panel-network">🌐 Игра по сети</button>
+    <button class="mbtn hover-snd" data-panel="panel-cases">🎁 Кейсы и скины</button>
     <button class="mbtn hover-snd" data-panel="panel-settings">Настройки</button>
     <button class="mbtn hover-snd" data-panel="panel-stats">Статистика</button>
     <button class="mbtn hover-snd" data-panel="panel-controls">Управление</button>
@@ -79,6 +80,30 @@
     </div>
   </div>
 
+  <div id="panel-cases" class="panel wide">
+    <div class="panel-title">Кейсы и скины <span class="gold-bal"></span> <button class="back hover-snd" data-panel="panel-main">← Назад</button></div>
+    <div class="net-tabs">
+      <div class="net-tab act hover-snd" data-ctab="cases">Кейсы</div>
+      <div class="net-tab hover-snd" data-ctab="inv">Инвентарь <span id="inv-count"></span></div>
+    </div>
+    <div id="cases-pane">
+      <div id="case-list" class="cards cases"></div>
+      <div id="case-detail" style="display:none">
+        <div class="case-head"><b id="case-name"></b><span id="case-odds" class="case-odds"></span></div>
+        <div id="roulette" class="roulette"><div class="roulette-marker"></div><div id="roulette-strip" class="roulette-strip"></div></div>
+        <button id="btn-open-case" class="mbtn big go hover-snd">Открыть</button>
+        <div id="case-afford" class="dim-note"></div>
+        <div class="section-lbl">Содержимое кейса</div>
+        <div id="case-contents" class="skin-grid"></div>
+      </div>
+    </div>
+    <div id="inv-pane" style="display:none">
+      <div id="inv-summary" class="dim-note"></div>
+      <div id="inv-filters" class="opts"></div>
+      <div id="inv-grid" class="skin-grid"></div>
+    </div>
+  </div>
+
   <div id="panel-settings" class="panel wide">
     <div class="panel-title">Настройки <button class="back hover-snd" data-panel="panel-main">← Назад</button></div>
     <form id="settings-form" onsubmit="return false">
@@ -129,10 +154,22 @@
     <div class="panel-title">Об игре <button class="back hover-snd" data-panel="panel-main">← Назад</button></div>
     <div class="about">
       <p><b>Standoff 3 — PC Edition</b>. Шутер от первого лица в духе Standoff 2 / Counter-Strike: раунды, экономика, установка и обезвреживание бомбы, 30+ видов оружия, гранаты, умные боты с четырьмя уровнями сложности.</p>
-      <p>Режимы: Разминирование, Командный бой, Каждый за себя, Гонка вооружений. Карты: Sandstone, Rust, Province, Arena.</p>
+      <p>Режимы: Разминирование, Командный бой, Каждый за себя, Гонка вооружений. Карты: Sandstone, Rust, Province, Arena. Игра по сети с друзьями.</p>
+      <p>Кейсы и скины: за каждый матч начисляется золото, на него открываются кейсы со скинами шести редкостей. Надетые скины видны от первого лица, на модели персонажа, на брошенном оружии и другим игрокам по сети.</p>
       <p>Все текстуры, модели и звуки генерируются процедурно прямо в игре — никаких сторонних файлов. Работает в браузере Chrome/Edge без установки.</p>
       <p class="dim">Советы: играйте в полноэкранном режиме (F11). Если курсор «выпадает», кликните по экрану. Настройки и статистика сохраняются в браузере.</p>
     </div>
+  </div>
+</div>
+
+<div id="skin-modal" style="display:none">
+  <div class="sm-box">
+    <div id="sm-title" class="sm-title"></div>
+    <div class="sm-canvas-wrap"><canvas id="sm-canvas" width="640" height="360"></canvas></div>
+    <div id="sm-name" class="sm-name"></div>
+    <div id="sm-rar" class="sm-rar"></div>
+    <div id="sm-count" class="sm-count"></div>
+    <div class="sm-btns"><button id="btn-sm-equip" class="mbtn hover-snd">Экипировать</button><button id="btn-sm-sell" class="mbtn hover-snd">Продать</button><button id="btn-sm-close" class="mbtn hover-snd">Закрыть</button></div>
   </div>
 </div>
 
@@ -162,6 +199,7 @@
 <script src="src/core/audio.js"></script>
 <script src="src/core/input.js"></script>
 <script src="src/game/config.js"></script>
+<script src="src/game/skins.js"></script>
 <script src="src/game/world.js"></script>
 <script src="src/game/nav.js"></script>
 <script src="src/game/mapbuilder.js"></script>
@@ -177,6 +215,7 @@
 <script src="src/net/hostsync.js"></script>
 <script src="src/net/clientsync.js"></script>
 <script src="src/game/game.js"></script>
+<script src="src/game/cases.js"></script>
 <script src="src/maps/sandstone.js"></script>
 <script src="src/maps/rust.js"></script>
 <script src="src/maps/province.js"></script>

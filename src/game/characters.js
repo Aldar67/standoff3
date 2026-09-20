@@ -67,11 +67,14 @@
       root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
       this.deathT = 0; this.bobPhase = 0;
     }
-    setWeapon(id) {
-      if (this.weaponId === id) return; this.weaponId = id;
+    setWeapon(id, skinId) {
+      skinId = skinId || null; if (this.weaponId === id && this.weaponSkin === skinId) return; this.weaponId = id; this.weaponSkin = skinId;
       if (this.weaponMesh) { this.weaponHolder.remove(this.weaponMesh); }
       const w = S3.WEAPONS[id]; if (!w) { this.weaponMesh = null; return; }
-      const m = S3.buildWeaponModel(w, 0.85); m.rotation.set(0, 0, 0); m.position.set(0.02, 0, 0.1); this.weaponMesh = m; this.weaponHolder.add(m);
+      const m = S3.buildWeaponModel(w, 0.85, skinId);
+      // weapon models point down -Z; the forearm's "down the arm" axis is -Y, so tip the model 90deg so the barrel
+      // continues along the raised arm (rotation 0 left every third-person gun hanging straight down from the fist)
+      m.rotation.set(Math.PI / 2, 0, 0); m.position.set(0.02, -0.02, 0.06); this.weaponMesh = m; this.weaponHolder.add(m);
     }
     // pose: moving speed (0..1), crouch (0..1), aim pitch (rad), dt
     update(dt, speed, crouch, pitch, firing, twist) {
@@ -132,8 +135,8 @@
     const model = new S3.CharacterModel(actor.team, skinIdx || 0);
     scene.add(model.root); model.root.visible = false;
     actor.model = model;
-    actor.onWeaponChange = (w) => model.setWeapon(w.id);
-    if (actor.current) model.setWeapon(actor.current.id);
+    actor.onWeaponChange = (w) => model.setWeapon(w.id, w.skin);
+    if (actor.current) model.setWeapon(actor.current.id, actor.current.skin);
     return model;
   };
 

@@ -49,7 +49,7 @@
         const pTeam = o.playerTeam === 'random' ? S3.pick(['T', 'CT']) : (o.playerTeam || 'CT');
         this.player = new S3.Player(this, { name: S.playerName || 'Игрок', team: pTeam }); this.actors.push(this.player);
         this.net = new S3.HostSync(this, net.net); this.net.setLocalKey();
-        for (const r of net.roster || []) this.net.addRemote(r.id, r.name, r.team, r.skinIdx);
+        for (const r of net.roster || []) this.net.addRemote(r.id, r.name, r.team, r.skinIdx, r.skins);
         const names = S3.shuffle(S3.BOT_NAMES.slice());
         const perTeam = o.botsPerTeam || 5; let ni = 0;
         for (const team of ['CT', 'T']) {
@@ -73,7 +73,7 @@
       this.hud = new S3.HUD(this);
       if (net && net.role === 'client') { this.mode = new S3.RemoteMode(o.mode); }
       else { this.mode = S3.createMode(this, o.mode || 'defuse', { rounds: o.rounds, killLimit: o.killLimit, timeLimit: o.timeLimit }); }
-      this.vm.setWeapon('knife', this.player.team);
+      this.vm.setWeapon('knife', this.player.team, this.player.inv.melee.skin);
       window.addEventListener('resize', () => this.onResize()); this.onResize();
       S3.Audio.startAmbient(theme.ambient);
       if (net && net.role === 'host') { this.wrapHudForBroadcast(); this.mode.start(); }
@@ -118,7 +118,7 @@
       }
       return best || list[0];
     }
-    spawnActor(a, any) { const s = this.pickSpawn(a.team, a, any); const y = this.world.floorAt(s.x, s.z, 30); a.spawnAt(s.x, y, s.z, s.yaw); a.updateModel(0); if (a.isLocal) { this.vm.buildArms(a.team); this.vm.setWeapon(a.current.id, a.team); } }
+    spawnActor(a, any) { const s = this.pickSpawn(a.team, a, any); const y = this.world.floorAt(s.x, s.z, 30); a.spawnAt(s.x, y, s.z, s.yaw); a.updateModel(0); if (a.isLocal) { this.vm.buildArms(a.team); this.vm.setWeapon(a.current.id, a.team, a.current.skin); } }
     visibleToTeam(a, team) { return !!this.radarVis[a.id]; }
     updateRadarVis() {
       const p = this.player; const vis = {}; const eye = p.eyePos(this.tmp); const fwd = p.forward(this.tmp2);

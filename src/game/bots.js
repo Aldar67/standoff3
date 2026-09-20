@@ -16,8 +16,8 @@
       this.stuckT = 0; this.lastProgress = V(); this.progressT = 0; this.jumpCooldown = 0; this.crouchT = 0;
       this.objective = null; this.objT = 0; this.radioT = 0; this.grenadeT = 5 + Math.random() * 10; this.lookAroundT = 0; this.wanderT = 0;
       this.tmpA = V(); this.tmpB = V(); this.tmpC = V(); this.tmpD = V(); this.bodyYaw = 0; this.personality = { aggression: Math.random(), patience: Math.random(), camper: Math.random() < 0.25 };
-      this.onWeaponChange = (w) => this.model.setWeapon(w.id);
-      this.model.setWeapon('knife');
+      this.onWeaponChange = (w) => this.model.setWeapon(w.id, w.skin);
+      this.setSkins(S3.randomBotSkins()); this.model.setWeapon('knife', this.inv.melee.skin);
       this.compensation = { easy: 0.25, medium: 0.5, hard: 0.75, expert: 0.92 }[this.diffName];
       this.onDamaged = (dmg, attacker) => { if (attacker && this.game.isEnemy(attacker, this) && attacker.alive) { const m = this.remember(attacker); m.lastPos.copy(attacker.pos); m.lastSeen = this.game.time - 0.2; if (!this.target) { this.target = attacker; this.reactionT = this.diff.reaction * 0.5; } } };
     }

@@ -10,7 +10,8 @@
   const WOOD = 0x6a4a2a, BLACK = 0x1a1a1c, DARK = 0x2a2a2e, STEEL = 0x8a8c90, GUN = 0x3a3a3e, TAN = 0x9a8a68, GREEN = 0x4a5a3a;
 
   // Models: forward = -Z, origin at grip top. Sets userData.muzzle (Vector3 local)
-  S3.buildWeaponModel = function (w, scale) {
+  // skinId (optional): a key of S3.SKINS -- body parts get the finish's primary material, dark furniture the secondary
+  S3.buildWeaponModel = function (w, scale, skinId) {
     const g = new THREE.Group(); const c = w.color || GUN; scale = scale || 1;
     let muzzle = new THREE.Vector3(0, 0.02, -0.5);
     switch (w.model) {
@@ -126,6 +127,13 @@
       }
       default: P(g, 0.04, 0.06, 0.3, c, 0, 0, -0.1);
     }
+    if (skinId && S3.SKINS && S3.SKINS[skinId]) {
+      const mats = S3.finishMaterials(S3.SKINS[skinId].finish);
+      const prim = new Set([c, GUN, 0x3a4a30, 0x5a4a30]); const sec = new Set([DARK, WOOD]);
+      if (w.model === 'knife') { prim.clear(); prim.add(0xc0c4c8); sec.add(BLACK); }
+      g.traverse((o) => { if (!o.isMesh) return; const h = o.material.color.getHex(); if (prim.has(h)) o.material = mats.primary; else if (sec.has(h)) o.material = mats.secondary; });
+      g.userData.skin = skinId;
+    }
     g.userData.muzzle = muzzle.clone().multiplyScalar(scale); g.scale.setScalar(scale);
     return g;
   };
@@ -138,6 +146,7 @@
       this.cooldown = 0; this.reloading = false; this.reloadT = 0; this.reloadTotal = 0; this.spreadAcc = 0; this.shotIdx = 0; this.sinceShot = 10;
       this.boltT = 0; this.burstLeft = 0; this.burstT = 0; this.drawT = 0; this.pattern = Weapon.pattern(id);
       this.pinPulled = false; this.pinT = 0; this.inspectT = 0; this.fireInterval = d.rpm ? 60 / d.rpm : 0.5;
+      this.skin = null; // S3.SKINS id; travels with the weapon instance (drops/pickups keep it)
     }
     static pattern(id) {
       const d = S3.WEAPONS[id]; const rnd = S3.seededRandom(id.length * 7919 + id.charCodeAt(0) * 31); const arr = [];
@@ -241,10 +250,10 @@
       this.armR = mk(0.02, -0.1); this.armL = mk(-0.16, 0.5); this.arms.add(this.armR); this.arms.add(this.armL);
       this.team = team;
     }
-    setWeapon(id, team) {
+    setWeapon(id, team, skinId) {
       if (team && team !== this.team) this.buildArms(team);
       if (this.model) this.weaponGroup.remove(this.model);
-      this.weaponId = id; const w = S3.WEAPONS[id]; this.model = S3.buildWeaponModel(w, 1); this.weaponGroup.add(this.model);
+      this.weaponId = id; this.skinId = skinId || null; const w = S3.WEAPONS[id]; this.model = S3.buildWeaponModel(w, 1, skinId); this.weaponGroup.add(this.model);
       // per-type placement
       const t = w.type;
       if (t === 'pistol') this.basePos.set(0.16, -0.19, -0.38); else if (t === 'knife') this.basePos.set(0.2, -0.2, -0.3); else if (t === 'grenade') this.basePos.set(0.18, -0.2, -0.32); else if (t === 'bomb') this.basePos.set(0.14, -0.22, -0.34);

@@ -105,7 +105,8 @@
     $('#mo-title').textContent = winner === null ? 'Ничья' : (won ? 'Победа!' : 'Поражение'); $('#mo-title').style.color = won ? '#6fdc6f' : (winner === null ? '#fff' : '#ff6060'); $('#mo-text').textContent = text;
     game.hud.renderScoreboard(); $('#mo-board').innerHTML = game.hud.sb.innerHTML; $('#matchover').style.display = 'flex';
     const acc = S3.Stats.data.shotsFired ? Math.round(S3.Stats.data.shotsHit / S3.Stats.data.shotsFired * 100) : 0;
-    $('#mo-me').innerHTML = `Ваш результат: <b>${p.kills}</b> убийств · <b>${p.deaths}</b> смертей · <b>${p.assists}</b> помощи · <b>${p.headshots}</b> в голову · MVP ×${p.mvps}`;
+    const reward = S3.Inventory.matchReward(p.kills, won, p.headshots); S3.Inventory.addGold(reward);
+    $('#mo-me').innerHTML = `Ваш результат: <b>${p.kills}</b> убийств · <b>${p.deaths}</b> смертей · <b>${p.assists}</b> помощи · <b>${p.headshots}</b> в голову · MVP ×${p.mvps}<br><span class="gold">+${reward} 🪙 золота</span> за матч — потратьте в разделе «Кейсы и скины»`;
   }
   function pauseGame() { if (!game || game.over) return; game.setPaused(true); $('#pause').style.display = 'flex'; }
   function resumeGame() { if (!game) return; $('#pause').style.display = 'none'; $('#panel-settings-pause').style.display = 'none'; game.paused = false; game.lastFrame = performance.now(); S3.Input.lock(); }
@@ -121,7 +122,7 @@
     const rows = [{ isHost: true, name: $('#net-host-name').value.trim() || S3.Settings.data.playerName || 'Хост' }];
     let ct = state.team === 'CT' ? 1 : 0, t = state.team === 'T' ? 1 : 0;
     rows[0].team = state.team;
-    for (const p of net.players) { const team = ct <= t ? 'CT' : 'T'; rows.push({ id: p.id, name: p.name, team }); if (team === 'CT') ct++; else t++; }
+    for (const p of net.players) { const team = ct <= t ? 'CT' : 'T'; rows.push({ id: p.id, name: p.name, team, skins: p.skins || {} }); if (team === 'CT') ct++; else t++; }
     return rows;
   }
   function renderNetPlayers() {
@@ -143,7 +144,7 @@
     S3.Settings.data.playerName = name; S3.Settings.save();
     const status = $('#net-host-status'); status.textContent = 'Подключение к серверу...'; status.className = 'net-status';
     const n = new S3.Net();
-    n.on('hello', (msg) => { if (!net.players.find((p) => p.id === msg._from)) net.players.push({ id: msg._from, name: msg.name }); renderNetPlayers(); });
+    n.on('hello', (msg) => { if (!net.players.find((p) => p.id === msg._from)) net.players.push({ id: msg._from, name: msg.name, skins: S3.cleanSkinMap(msg.skins) }); renderNetPlayers(); });
     n.on('leave', (id) => { net.players = net.players.filter((p) => p.id !== id); renderNetPlayers(); });
     n.connect(addr, name, true).then(() => {
       net.conn = n; net.role = 'host';
@@ -164,7 +165,7 @@
     if (!addr) { status.textContent = 'Введите адрес хоста'; status.className = 'net-status err'; return; }
     S3.Settings.data.playerName = name; S3.Settings.save();
     status.textContent = 'Подключение...'; status.className = 'net-status';
-    const n = new S3.Net();
+    const n = new S3.Net(); n.skins = S3.Inventory.equippedMap();
     n.on('ev', (msg) => {
       if (msg.k === 'start') {
         const me = msg.roster.find((r) => r.id === n.myId); const connForGame = n; net.conn = null;
@@ -190,9 +191,10 @@
       if (id === 'panel-main' && net.conn && !game) resetNetLobby(); // leaving the network panel without starting: drop the lobby connection
       if (id === 'panel-play') renderPlay(); if (id === 'panel-settings') renderSettings(); if (id === 'panel-stats') renderStats();
       if (id === 'panel-network') { $('#net-host-name').value = S3.Settings.data.playerName || 'Игрок'; $('#net-join-name').value = S3.Settings.data.playerName || 'Игрок'; }
+      if (id === 'panel-cases') S3.CasesUI.show();
       showPanel(id);
     }));
-    bindNetworkMenu();
+    bindNetworkMenu(); S3.CasesUI.bind();
     $('#btn-start').addEventListener('click', () => startGame());
     $('#bots-range').addEventListener('input', (e) => { state.bots = +e.target.value; $('#bots-val').textContent = state.bots + ' на команду'; });
     $('#settings-form').addEventListener('input', applySettingsFromForm); $('#settings-form').addEventListener('change', applySettingsFromForm);
@@ -206,7 +208,7 @@
     document.getElementById('game-canvas').addEventListener('click', () => { if (game && !game.paused && !game.hud.buyOpen && !game.over) S3.Input.lock(); });
     S3.Input.onLockChange = (locked) => { if (!game) return; if (!locked && !game.hud.buyOpen && !game.paused && !game.over) { pauseGame(); } };
     window.addEventListener('keydown', (e) => {
-      if (!game) { if (e.code === 'Escape') showPanel('panel-main'); return; }
+      if (!game) { if (e.code === 'Escape') { if (S3.CasesUI.open) S3.CasesUI.closeModal(); else showPanel('panel-main'); } return; }
       if (game.hud.buyOpen) { if (game.hud.buyKey(e.code)) e.preventDefault(); return; }
       if (e.code === 'Escape' && game.paused && !game.over) { resumeGame(); return; }
       if (e.code === 'Escape' && !game.paused && !S3.Input.locked) { pauseGame(); return; }
@@ -215,10 +217,10 @@
       if (e.code === 'KeyZ' && game.player.alive) { game.radioOpen = !game.radioOpen; game.hud.setHint(game.radioOpen ? 'Радио: ' + S3.RADIO.map((r) => r.key + '-' + r.text).join('  ') : ''); if (game.radioOpen) game.hud.hintT = -5; }
       else if (game.radioOpen && /^Digit[1-9]$/.test(e.code)) { const r = S3.RADIO.find((x) => x.key === e.code.slice(5)); if (r) { if (game.net && game.net.role === 'client') game.net.sendRadio(r.key); else game.radio(game.player, r.text); } game.radioOpen = false; game.hud.setHint(''); e.preventDefault(); }
     });
-    $('#menu-version').textContent = 'v1.0 · Three.js r158 · процедурные текстуры и звук';
+    $('#menu-version').textContent = 'v' + S3.VERSION + ' · Three.js r158 · процедурные текстуры, модели и звук';
   }
   function init() {
-    S3.Settings.load(); S3.Stats.load(); bindMenu(); renderPlay(); showPanel('panel-main'); $('#menu').style.display = 'flex';
+    S3.Settings.load(); S3.Stats.load(); S3.Inventory.load(); bindMenu(); renderPlay(); showPanel('panel-main'); $('#menu').style.display = 'flex';
     if (!window.THREE) { alert('Three.js не загрузился. Проверьте файл lib/three.min.js'); }
   }
   window.addEventListener('DOMContentLoaded', init);

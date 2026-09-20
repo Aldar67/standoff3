@@ -32,9 +32,10 @@
     }
     // called once per connected human before match start, in join order (the host's own player
     // is NOT added here -- see setLocalKey() below).
-    addRemote(connId, name, team, skinIdx) {
+    addRemote(connId, name, team, skinIdx, skins) {
       const game = this.game;
       const actor = new S3.Actor(game, { name: name || ('Игрок ' + connId), team, isBot: false, isLocal: false, skinIdx });
+      actor.setSkins(skins);
       actor.netKey = 'h' + connId; actor.netConnId = connId; actor.remoteInput = true; actor.remoteBuyOpen = false;
       S3.attachCharacterModel(actor, game.scene, skinIdx || 0);
       game.actors.push(actor);
@@ -81,7 +82,7 @@
       const game = this.game; this.tick++;
       const actors = game.actors.filter((a) => a.netKey).map((a) => {
         const w = a.current;
-        return { k: a.netKey, name: a.name, team: a.team, x: +a.pos.x.toFixed(2), y: +a.pos.y.toFixed(2), z: +a.pos.z.toFixed(2), yaw: +a.yaw.toFixed(3), pitch: +a.pitch.toFixed(3), hp: Math.round(a.health), armor: Math.round(a.armor), helmet: !!a.helmet, alive: !!a.alive, wid: w ? w.id : null, ammo: w ? w.ammo : 0, reserve: w ? w.reserve : 0, gcount: w && w.def.type === 'grenade' ? w.count : 0, reloading: !!(w && w.reloading), crouch: +a.crouchAmt.toFixed(2), level: a.level || 0, kills: a.kills, deaths: a.deaths, assists: a.assists, score: a.score, money: Math.round(a.money), hasBomb: !!a.hasBomb, defuser: !!a.defuser, firing: a.firing > 0, isBot: !!a.isBot, diff: a.isBot ? a.diffName : null, scoped: !!a.scoped };
+        return { k: a.netKey, name: a.name, team: a.team, x: +a.pos.x.toFixed(2), y: +a.pos.y.toFixed(2), z: +a.pos.z.toFixed(2), yaw: +a.yaw.toFixed(3), pitch: +a.pitch.toFixed(3), hp: Math.round(a.health), armor: Math.round(a.armor), helmet: !!a.helmet, alive: !!a.alive, wid: w ? w.id : null, ws: (w && w.skin) || null, ammo: w ? w.ammo : 0, reserve: w ? w.reserve : 0, gcount: w && w.def.type === 'grenade' ? w.count : 0, reloading: !!(w && w.reloading), crouch: +a.crouchAmt.toFixed(2), level: a.level || 0, kills: a.kills, deaths: a.deaths, assists: a.assists, score: a.score, money: Math.round(a.money), hasBomb: !!a.hasBomb, defuser: !!a.defuser, firing: a.firing > 0, isBot: !!a.isBot, diff: a.isBot ? a.diffName : null, scoped: !!a.scoped };
       });
       const grenades = game.effects.grenades.map((g) => { if (!this.nadeIds.has(g)) this.nadeIds.set(g, this.nadeCounter++); return { id: this.nadeIds.get(g), wid: g.id, x: +g.pos.x.toFixed(2), y: +g.pos.y.toFixed(2), z: +g.pos.z.toFixed(2) }; });
       this.net.send({ t: 'snap', tick: this.tick, time: +game.time.toFixed(2), mode: this.modeSnapshot(), actors, grenades });

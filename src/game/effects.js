@@ -196,7 +196,7 @@
     }
     // ---------- pickups ----------
     spawnPickup(weapon, pos, vel, isBomb) {
-      const mesh = S3.buildWeaponModel(weapon.def, 1); mesh.position.copy(pos); this.scene.add(mesh);
+      const mesh = S3.buildWeaponModel(weapon.def, 1, weapon.skin); mesh.position.copy(pos); this.scene.add(mesh);
       const p = { weapon, mesh, pos: pos.clone(), vel: vel ? vel.clone() : new THREE.Vector3(), rest: false, life: 0, isBomb: !!isBomb, spin: Math.random() * 6 }; this.pickups.push(p); return p;
     }
     updatePickups(dt) {

@@ -6,7 +6,8 @@
   class Player extends S3.Actor {
     constructor(game, opts) {
       super(game, Object.assign({ isBot: false }, opts));
-      this.onWeaponChange = (w) => { game.vm.setWeapon(w.id, this.team); this.pinPulled = false; };
+      this.onWeaponChange = (w) => { game.vm.setWeapon(w.id, this.team, w.skin); this.pinPulled = false; };
+      this.setSkins(S3.Inventory.equippedMap());
       this.pinPulled = false; this.throwCooldown = 0; this.crouchToggled = false; this.landDip = 0; this.viewRoll = 0;
       this.mouseDX = 0; this.mouseDY = 0; this.fovZoom = 0; this.spectateTarget = null; this.hitFlash = 0; this.inspectT = 0;
       this.onDamaged = (dmg, attacker, zone, dx, dz) => {

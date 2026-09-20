@@ -18,7 +18,7 @@
         try { ws = new WebSocket(url); } catch (e) { reject(e); return; }
         this.ws = ws;
         const timeout = setTimeout(() => { if (!settled) { settled = true; try { ws.close(); } catch (e) { } reject(new Error('timeout')); } }, 6000);
-        ws.onopen = () => { this.connected = true; if (wantHost) this.send({ t: 'hostclaim', name: this.name }); else this.send({ t: 'hello', name: this.name }); };
+        ws.onopen = () => { this.connected = true; if (wantHost) this.send({ t: 'hostclaim', name: this.name }); else this.send({ t: 'hello', name: this.name, skins: this.skins || {} }); };
         ws.onmessage = (ev) => {
           let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
           if (msg.t === 'welcome') { this.myId = msg.id; }

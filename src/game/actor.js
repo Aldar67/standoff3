@@ -29,7 +29,10 @@
       this.fireHeld = false; this.firePressed = false; this.altHeld = false; this.altPressed = false;
       this.footstepT = 0; this.tmpV = new THREE.Vector3(); this.speedFrac = 0; this.firing = 0;
       this.lastNoiseT = 0; this.ping = 0;
+      this.skins = {}; // weaponId -> S3.SKINS id (cosmetic loadout: player's inventory, bot random, remote's hello)
     }
+    skinFor(wid) { return (this.skins && this.skins[wid]) || null; }
+    setSkins(map) { this.skins = S3.cleanSkinMap(map); for (const w of this.weaponList()) { w.skin = this.skinFor(w.id); } if (this.current && this.onWeaponChange) this.onWeaponChange(this.current); }
     // generic third-person visual update for any actor that carries a CharacterModel
     // (bots override this with an identical call; remote-human actors and client puppets use it directly)
     updateModel(dt) { if (this.model) S3.animateCharacterVisual(this, dt); }
@@ -54,7 +57,7 @@
       }
       if (d.slot === 'bomb') { this.inv.bomb = new S3.Weapon('bomb'); this.hasBomb = true; return this.inv.bomb; }
       const slot = d.slot; const old = this.inv[slot];
-      const w = new S3.Weapon(id); this.inv[slot] = w;
+      const w = new S3.Weapon(id); w.skin = this.skinFor(id); this.inv[slot] = w;
       if (old && !silent) this.game.dropWeaponFrom(this, old);
       if (!silent) this.select(w);
       return w;
@@ -83,7 +86,7 @@
       if (this.current === w) this.select(this.bestWeapon(), true);
     }
     consumeGrenade(w) { w.count--; if (w.count <= 0) { this.removeWeapon(w); } }
-    resetInventory() { this.inv = { primary: null, secondary: null, melee: new S3.Weapon('knife'), grenades: [], bomb: null }; this.hasBomb = false; this.current = this.inv.melee; this.lastWeapon = null; }
+    resetInventory() { this.inv = { primary: null, secondary: null, melee: new S3.Weapon('knife'), grenades: [], bomb: null }; this.inv.melee.skin = this.skinFor('knife'); this.hasBomb = false; this.current = this.inv.melee; this.lastWeapon = null; }
     hasGrenade(id) { const g = this.inv.grenades.find((x) => x.id === id); return g && g.count > 0 ? g : null; }
 
     // ---- spawn / death ----
