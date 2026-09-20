@@ -148,15 +148,15 @@
     renderNetPlayers();
   }
   function hostConnect() {
-    const name = $('#net-host-name').value.trim() || 'Хост'; const addr = $('#net-host-addr').value.trim() || 'ws://localhost:8766'; const room = $('#net-host-room').value.trim() || name;
+    const name = $('#net-host-name').value.trim() || 'Хост'; const addr = $('#net-host-addr').value.trim() || 'ws://localhost:8766'; const room = $('#net-host-room').value.trim() || name; const pass = $('#net-host-pass').value;
     S3.Settings.data.playerName = name; S3.Settings.data.netHostAddr = addr; S3.Settings.save();
     const status = $('#net-host-status'); status.textContent = 'Подключение к серверу...'; status.className = 'net-status';
     const n = new S3.Net();
     n.on('hello', (msg) => { if (!net.players.find((p) => p.id === msg._from)) net.players.push({ id: msg._from, name: msg.name, skins: S3.cleanSkinMap(msg.skins) }); renderNetPlayers(); });
     n.on('leave', (id) => { net.players = net.players.filter((p) => p.id !== id); renderNetPlayers(); });
-    n.connect(addr, name, true, room).then(() => {
+    n.connect(addr, name, true, room, pass).then(() => {
       net.conn = n; net.role = 'host';
-      status.textContent = `Комната «${n.room}» создана. Скажите друзьям её название, настройте матч и нажмите «Начать игру».`; status.className = 'net-status ok';
+      status.textContent = `Комната «${n.room}» создана${pass ? ' (с паролем)' : ''}. Скажите друзьям её название, настройте матч и нажмите «Начать игру».`; status.className = 'net-status ok';
       $('#net-lobby').style.display = 'block'; renderNetLobby();
     }).catch((e) => {
       status.className = 'net-status err';
@@ -172,7 +172,7 @@
     startGame({ playerTeam: hostEntry.team, botsPerTeam: state.bots, net: { role: 'host', net: connForGame, roster: others } });
   }
   function joinConnect() {
-    const name = $('#net-join-name').value.trim() || 'Игрок'; const addr = $('#net-join-addr').value.trim(); const room = $('#net-join-room').value.trim();
+    const name = $('#net-join-name').value.trim() || 'Игрок'; const addr = $('#net-join-addr').value.trim(); const room = $('#net-join-room').value.trim(); const pass = $('#net-join-pass').value;
     const status = $('#net-join-status');
     if (!addr) { status.textContent = 'Введите адрес хоста'; status.className = 'net-status err'; return; }
     S3.Settings.data.playerName = name; S3.Settings.data.netJoinAddr = addr; S3.Settings.save();
@@ -186,8 +186,9 @@
     });
     n.on('hostleft', () => { if (!game) { status.textContent = 'Хост вышел. Ждём, пока кто-нибудь создаст игру...'; status.className = 'net-status'; } });
     n.on('hostset', () => { if (!game) { status.textContent = 'Хост создал игру — вы в лобби. Ожидание запуска матча...'; status.className = 'net-status ok'; } });
-    n.connect(addr, name, false, room).then(() => { net.conn = n; net.role = 'client'; status.textContent = n.hostId !== null && n.hostId !== undefined ? `Вы в комнате «${n.room}». Ожидание запуска матча хостом...` : `Вы в комнате «${n.room}», но хост её ещё не создал — как только создаст, вы попадёте в лобби.`; status.className = 'net-status ok'; })
-      .catch((e) => { status.textContent = 'Не удалось подключиться (' + e.message + ')'; status.className = 'net-status err'; });
+    n.on('badpass', () => { if (!game) { status.textContent = 'Неверный пароль комнаты.'; status.className = 'net-status err'; } });
+    n.connect(addr, name, false, room, pass).then(() => { net.conn = n; net.role = 'client'; status.textContent = n.hostId !== null && n.hostId !== undefined ? `Вы в комнате «${n.room}». Ожидание запуска матча хостом...` : `Вы в комнате «${n.room}», но хост её ещё не создал — как только создаст, вы попадёте в лобби.`; status.className = 'net-status ok'; })
+      .catch((e) => { status.textContent = e.message === 'badpass' ? 'Неверный пароль комнаты.' : 'Не удалось подключиться (' + e.message + ')'; status.className = 'net-status err'; });
   }
   // Desktop build (Electron): config.json carries the relay address of the owner's VPS; it becomes the default for
   // both hosting and joining so nobody has to type it (the owner's config wins over a previously typed address).
@@ -210,7 +211,7 @@
     S3.Net.listRooms(addr).then((rooms) => {
       const open = rooms.filter((r) => r.host);
       if (!open.length) { box.innerHTML = '<div class="dim-note">Открытых комнат нет — попросите хоста создать игру, или впишите название комнаты и ждите его там.</div>'; return; }
-      box.innerHTML = open.map((r) => `<div class="room-row ${r.started ? 'started' : ''}" data-room="${r.code.replace(/"/g, '&quot;')}"><span class="room-name">${r.code.replace(/[<>]/g, '')}</span><span class="room-info">хост: ${String(r.host).replace(/[<>]/g, '')} · игроков: ${r.players}${r.started ? ' · матч идёт' : ' · сбор'}</span></div>`).join('');
+      box.innerHTML = open.map((r) => `<div class="room-row ${r.started ? 'started' : ''}" data-room="${r.code.replace(/"/g, '&quot;')}"><span class="room-name">${r.locked ? '🔒 ' : ''}${r.code.replace(/[<>]/g, '')}</span><span class="room-info">хост: ${String(r.host).replace(/[<>]/g, '')} · игроков: ${r.players}${r.started ? ' · матч идёт' : ' · сбор'}</span></div>`).join('');
       box.querySelectorAll('.room-row').forEach((el) => el.addEventListener('click', () => { $('#net-join-room').value = el.dataset.room; box.querySelectorAll('.room-row').forEach((x) => x.classList.toggle('sel', x === el)); S3.Audio.uiClick(); }));
     }).catch((e) => { box.innerHTML = `<div class="dim-note">Не удалось получить список (${e.message})</div>`; });
   }

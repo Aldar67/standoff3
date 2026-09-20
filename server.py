@@ -101,7 +101,7 @@ class State:
         old = self.room_of.get(cid)
         if old and old != code:
             self._leave_room(cid, old)
-        room = self.rooms.setdefault(code, {"host": None, "members": set(), "started": False})
+        room = self.rooms.setdefault(code, {"host": None, "members": set(), "started": False, "pass": ""})
         room["members"].add(cid)
         self.room_of[cid] = code
         return room
@@ -115,6 +115,7 @@ class State:
         if was_host:
             room["host"] = None
             room["started"] = False
+            room["pass"] = ""
         if not room["members"]:
             del self.rooms[code]
         return was_host
@@ -150,6 +151,7 @@ class State:
                 if room["host"] is None:
                     room["host"] = cid
                     room["started"] = False
+                    room["pass"] = str(msg.get('pass') or '')[:32]  # optional room password set by the host
                     claimed = True
                 else:
                     claimed = False
@@ -165,8 +167,17 @@ class State:
             self.names[cid] = msg.get('name', '?')
             code = self.room_code(msg)
             with self.lock:
-                room = self._join(cid, code)
-                host = room["host"]
+                existing = self.rooms.get(code)
+                if existing and existing["host"] is not None and existing["pass"] and str(msg.get('pass') or '') != existing["pass"]:
+                    wrong = True
+                    room = None
+                else:
+                    wrong = False
+                    room = self._join(cid, code)
+                host = room["host"] if room else None
+            if wrong:
+                self.send_to(cid, {"t": "sys", "event": "badpass"})
+                return
             if host is not None:
                 self.send_to(cid, {"t": "sys", "event": "hostset", "id": host})
                 msg['_from'] = cid
@@ -177,7 +188,7 @@ class State:
         if t == 'rooms':
             with self.lock:
                 lst = [{"code": c, "host": self.names.get(r["host"], '?') if r["host"] is not None else None,
-                        "players": len(r["members"]), "started": r["started"]} for c, r in self.rooms.items()]
+                        "players": len(r["members"]), "started": r["started"], "locked": bool(r["pass"])} for c, r in self.rooms.items()]
             self.send_to(cid, {"t": "rooms", "rooms": lst})
             return
         with self.lock:

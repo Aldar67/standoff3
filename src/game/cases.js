@@ -53,7 +53,7 @@
     const inv = S3.Inventory; const cnt = inv.count(s.id); const eq = inv.isEquipped(s.id);
     return `<div class="skin-card r-${s.rarity} ${eq ? 'eq' : ''}" data-skin="${s.id}" style="--rc:${R[s.rarity].color}"><img src="${S3.skinThumb(s.id)}" alt=""><div class="skin-name">${s.name}</div><div class="skin-rar">${R[s.rarity].name}${cnt > 1 ? ' · ×' + cnt : ''}${eq ? ' · <b>надето</b>' : ''}</div>${extra || ''}</div>`;
   }
-  function refreshGold() { $$('.gold-bal').forEach((e) => e.innerHTML = gold(S3.Inventory.data.gold)); const n = Object.values(S3.Inventory.data.items).reduce((a, b) => a + b, 0); $('#inv-count').textContent = n ? `(${n})` : ''; }
+  function refreshGold() { $$('.gold-bal').forEach((e) => e.innerHTML = gold(S3.Inventory.data.gold)); const n = Object.values(S3.Inventory.data.items).reduce((a, b) => a + b, 0); $('#inv-count').textContent = n ? `(${n})` : ''; if (S3.CasesUI && S3.CasesUI.onChange) S3.CasesUI.onChange(); }
   function switchTab(tab) {
     ui.tab = tab; $$('[data-ctab]').forEach((t) => t.classList.toggle('act', t.dataset.ctab === tab));
     $('#cases-pane').style.display = tab === 'cases' ? 'block' : 'none'; $('#inv-pane').style.display = tab === 'inv' ? 'block' : 'none';

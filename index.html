@@ -15,7 +15,7 @@
   <div class="menu-bg"></div>
   <canvas id="menu-canvas"></canvas>
   <div id="menu-side">
-  <div class="logo"><span class="logo-a">STANDOFF</span><span class="logo-b">3</span><div class="logo-sub">PC EDITION · v3.7</div></div>
+  <div class="logo"><span class="logo-a">STANDOFF</span><span class="logo-b">3</span><div class="logo-sub">PC EDITION · v3.8</div></div>
   <div id="panel-main" class="panel">
     <button class="mbtn big hover-snd" data-panel="panel-play">▶ Играть</button>
     <button class="mbtn hover-snd" data-panel="panel-network">🌐 Игра по сети</button>
@@ -60,6 +60,7 @@
         <div class="row"><span>Ваш ник</span><input id="net-host-name" type="text" maxlength="16"></div>
         <div class="row"><span>Адрес сервера</span><input id="net-host-addr" type="text" value="ws://localhost:8766"></div>
         <div class="row"><span>Название комнаты</span><input id="net-host-room" type="text" maxlength="32" placeholder="по умолчанию — ваш ник"></div>
+        <div class="row"><span>Пароль комнаты</span><input id="net-host-pass" type="text" maxlength="32" placeholder="необязательно"></div>
       </div>
       <button id="btn-net-host-connect" class="mbtn hover-snd">Подключиться как хост</button>
       <div id="net-host-status" class="net-status"></div>
@@ -83,6 +84,7 @@
         <div class="row"><span>Ваш ник</span><input id="net-join-name" type="text" maxlength="16"></div>
         <div class="row"><span>Адрес хоста</span><input id="net-join-addr" type="text" placeholder="ws://192.168.1.50:8766"></div>
         <div class="row"><span>Комната</span><input id="net-join-room" type="text" maxlength="32" placeholder="выберите из списка или впишите название"></div>
+        <div class="row"><span>Пароль</span><input id="net-join-pass" type="text" maxlength="32" placeholder="если комната с замком 🔒"></div>
       </div>
       <div class="section-lbl">Открытые комнаты <button id="btn-net-rooms" class="back hover-snd" type="button">↻ Обновить</button></div>
       <div id="net-rooms" class="net-rooms"></div>

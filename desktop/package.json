@@ -1,7 +1,7 @@
 {
   "name": "standoff3",
   "productName": "Standoff 3",
-  "version": "3.7.0",
+  "version": "3.8.0",
   "description": "Standoff 3 — desktop edition",
   "main": "main.js",
   "private": true
