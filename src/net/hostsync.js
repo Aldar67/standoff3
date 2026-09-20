@@ -27,6 +27,8 @@
       net.on('buyopen', (msg) => { const r = this.remotes[msg._from]; if (r) r.actor.remoteBuyOpen = !!msg.open; });
       net.on('throw', (msg) => { const r = this.remotes[msg._from]; if (r && r.actor.alive) { const w = r.actor.hasGrenade(msg.wid) || (r.actor.current && r.actor.current.id === msg.wid ? r.actor.current : null); if (w) game.throwGrenade(r.actor, w, msg.strength || 1); } });
       net.on('radio', (msg) => { const r = this.remotes[msg._from]; if (r) { const rd = S3.RADIO.find((x) => x.key === msg.key); if (rd) game.radio(r.actor, rd.text); } });
+      net.on('takeover', (msg) => { const r = this.remotes[msg._from]; if (!r) return; const bot = game.bots.find((b) => b.netKey === msg.key); if (bot) game.takeOverBot(r.actor, bot); });
+      net.on('chat', (msg) => { const r = this.remotes[msg._from]; if (r && typeof msg.text === 'string') game.chatFrom(r.actor, msg.text.slice(0, 120)); });
       net.on('leave', (id) => { const r = this.remotes[id]; if (r && r.actor.alive) { r.actor.health = 0; r.actor.alive = false; if (r.actor.model) r.actor.model.root.visible = false; this.broadcastChat(`<span class="sys">${r.actor.name} отключился</span>`); } });
       net.on('hello', (msg) => { net.send({ t: 'ev', k: 'toolate', for: msg._from }); }); // match already started
     }
@@ -82,7 +84,7 @@
       const game = this.game; this.tick++;
       const actors = game.actors.filter((a) => a.netKey).map((a) => {
         const w = a.current;
-        return { k: a.netKey, name: a.name, team: a.team, x: +a.pos.x.toFixed(2), y: +a.pos.y.toFixed(2), z: +a.pos.z.toFixed(2), yaw: +a.yaw.toFixed(3), pitch: +a.pitch.toFixed(3), hp: Math.round(a.health), armor: Math.round(a.armor), helmet: !!a.helmet, alive: !!a.alive, wid: w ? w.id : null, ws: (w && w.skin) || null, ammo: w ? w.ammo : 0, reserve: w ? w.reserve : 0, gcount: w && w.def.type === 'grenade' ? w.count : 0, reloading: !!(w && w.reloading), crouch: +a.crouchAmt.toFixed(2), level: a.level || 0, kills: a.kills, deaths: a.deaths, assists: a.assists, score: a.score, money: Math.round(a.money), hasBomb: !!a.hasBomb, defuser: !!a.defuser, firing: a.firing > 0, isBot: !!a.isBot, diff: a.isBot ? a.diffName : null, scoped: !!a.scoped };
+        return { k: a.netKey, name: a.name, team: a.team, x: +a.pos.x.toFixed(2), y: +a.pos.y.toFixed(2), z: +a.pos.z.toFixed(2), yaw: +a.yaw.toFixed(3), pitch: +a.pitch.toFixed(3), hp: Math.round(a.health), armor: Math.round(a.armor), helmet: !!a.helmet, alive: !!a.alive, hid: !!a.takenOver, wid: w ? w.id : null, ws: (w && w.skin) || null, ammo: w ? w.ammo : 0, reserve: w ? w.reserve : 0, gcount: w && w.def.type === 'grenade' ? w.count : 0, reloading: !!(w && w.reloading), crouch: +a.crouchAmt.toFixed(2), level: a.level || 0, kills: a.kills, deaths: a.deaths, assists: a.assists, score: a.score, money: Math.round(a.money), hasBomb: !!a.hasBomb, defuser: !!a.defuser, firing: a.firing > 0, isBot: !!a.isBot, diff: a.isBot ? a.diffName : null, scoped: !!a.scoped };
       });
       const grenades = game.effects.grenades.map((g) => { if (!this.nadeIds.has(g)) this.nadeIds.set(g, this.nadeCounter++); return { id: this.nadeIds.get(g), wid: g.id, x: +g.pos.x.toFixed(2), y: +g.pos.y.toFixed(2), z: +g.pos.z.toFixed(2) }; });
       this.net.send({ t: 'snap', tick: this.tick, time: +game.time.toFixed(2), mode: this.modeSnapshot(), actors, grenades });

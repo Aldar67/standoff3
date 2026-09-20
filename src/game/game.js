@@ -6,9 +6,9 @@
 
   const THEMES = {
     desert: { skyTop: 0x2a6fd6, skyHorizon: 0xcfe3f5, sunDir: [0.45, 0.8, 0.35], sunColor: 0xfff1d6, sunI: 2.6, hemiSky: 0x9ec8ff, hemiGround: 0xb59a6a, hemiI: 0.9, fog: 0xd9e4ee, fogNear: 70, fogFar: 260, ambient: 'desert', exposure: 1.0 },
-    industrial: { skyTop: 0x4a5d75, skyHorizon: 0xb9c3cc, sunDir: [-0.35, 0.7, 0.5], sunColor: 0xe8ecf2, sunI: 1.7, hemiSky: 0x9aa8b8, hemiGround: 0x4a4a48, hemiI: 0.8, fog: 0xaeb8c2, fogNear: 40, fogFar: 180, ambient: 'industrial', exposure: 0.95 },
-    urban: { skyTop: 0x3572c9, skyHorizon: 0xdbe6f0, sunDir: [0.3, 0.75, -0.5], sunColor: 0xfff4e0, sunI: 2.3, hemiSky: 0xa7cbff, hemiGround: 0x7a705f, hemiI: 0.85, fog: 0xd6e0ea, fogNear: 60, fogFar: 240, ambient: 'desert', exposure: 1.0 },
-    sunset: { skyTop: 0x3b3f8a, skyHorizon: 0xf2a86b, sunDir: [-0.7, 0.35, 0.4], sunColor: 0xffc48a, sunI: 2.2, hemiSky: 0x8a7fc9, hemiGround: 0x6a4a3a, hemiI: 0.75, fog: 0xe9b28c, fogNear: 50, fogFar: 200, ambient: 'desert', exposure: 1.0 },
+    industrial: { skyTop: 0x5a7394, skyHorizon: 0xc9d3dc, sunDir: [-0.35, 0.8, 0.5], sunColor: 0xf4f0e8, sunI: 2.4, hemiSky: 0xb4c2d2, hemiGround: 0x6a6a66, hemiI: 1.15, fog: 0xbcc6d0, fogNear: 60, fogFar: 230, ambient: 'industrial', exposure: 1.12 },
+    urban: { skyTop: 0x3572c9, skyHorizon: 0xdbe6f0, sunDir: [0.3, 0.75, -0.5], sunColor: 0xfff4e0, sunI: 2.5, hemiSky: 0xa7cbff, hemiGround: 0x8a8070, hemiI: 1.0, fog: 0xd6e0ea, fogNear: 60, fogFar: 240, ambient: 'desert', exposure: 1.05 },
+    sunset: { skyTop: 0x4a4fa0, skyHorizon: 0xf6b57c, sunDir: [-0.6, 0.55, 0.4], sunColor: 0xffd0a0, sunI: 2.7, hemiSky: 0xb0a6e0, hemiGround: 0x8a6a56, hemiI: 1.15, fog: 0xecbd9a, fogNear: 60, fogFar: 230, ambient: 'desert', exposure: 1.12 },
   };
 
   class Game {
@@ -30,6 +30,8 @@
       // map
       const def = S3.MAPS[this.opts.map](); this.map = S3.buildMap(def); this.world = this.map.world; this.nav = this.map.nav; this.scene.add(this.map.group);
       const theme = THEMES[def.theme.name || 'desert'] || THEMES.desert; this.theme = theme; renderer.toneMappingExposure = theme.exposure;
+      // backdrop beyond the walls (skyline, props, endless ground, clouds) -- decorative only
+      { let minF = Infinity; for (let k = 0; k < def.h.length; k++) if (!isNaN(def.h[k])) minF = Math.min(minF, def.h[k]); this.scenery = S3.buildScenery(this.scene, def, def.theme.name || 'desert', this.map.bounds, isFinite(minF) ? minF : 0); }
       // lighting
       const sun = new THREE.DirectionalLight(theme.sunColor, theme.sunI); const sd = new V3(...theme.sunDir).normalize(); sun.position.copy(sd).multiplyScalar(120); sun.castShadow = !!S.shadows;
       const b = this.map.bounds; const ext = Math.max(b.xmax - b.xmin, b.zmax - b.zmin) * 0.55;
@@ -312,6 +314,51 @@
       if (actor.isLocal) this.hud.addChat(`<span class="sys">Подобрано: ${w.def.name}</span>`);
       return true;
     }
+    // ---------- chat / bots / takeover ----------
+    chatFrom(actor, text) {
+      const html = `<b style="color:${S3.TEAM_COLOR_CSS[actor.team]}">${actor.name}:</b> ${text.replace(/[<>]/g, '')}`;
+      this.hud.addChat(html); if (this.net && this.net.role === 'host') this.net.broadcastChat(html);
+    }
+    addBot(team, difficulty) {
+      const o = this.opts; if (!team) { const ct = this.actors.filter((a) => a.team === 'CT').length, t = this.actors.filter((a) => a.team === 'T').length; team = ct <= t ? 'CT' : 'T'; }
+      const used = new Set(this.actors.map((a) => a.name)); const name = S3.shuffle(S3.BOT_NAMES.filter((n) => !used.has(n)))[0] || ('Bot' + this.actors.length);
+      const bot = new S3.Bot(this, { name, team, difficulty: S3.DIFFICULTY[difficulty] ? difficulty : (o.difficulty || 'medium'), skinIdx: this.bots.length });
+      this.actors.push(bot); this.bots.push(bot); if (this.net && this.net.role === 'host') this.net.tagBots();
+      if (this.mode.respawnTime) { bot.alive = false; bot.respawnT = 1; }
+      else if (this.mode.phase === 'live' || this.mode.phase === 'freeze') { this.spawnActor(bot, true); bot.giveWeapon(team === 'CT' ? 'usp' : 'g22', true); bot.select(bot.bestWeapon(), true); }
+      this.hud.addChat(`<span class="sys">Бот ${bot.name} присоединился (${S3.TEAM_NAME[team]})</span>`); return bot;
+    }
+    kickBot(bot) {
+      if (!bot || !bot.isBot) return false;
+      if (bot.hasBomb && this.mode.bombCarrierDied) this.mode.bombCarrierDied(bot);
+      bot.alive = false; bot.health = 0; if (bot.model) this.scene.remove(bot.model.root);
+      this.actors.splice(this.actors.indexOf(bot), 1); this.bots.splice(this.bots.indexOf(bot), 1);
+      for (const a of this.actors) { if (a.target === bot) a.target = null; if (a.spectateTarget === bot) a.spectateTarget = null; }
+      this.hud.addChat(`<span class="sys">Бот ${bot.name} убран</span>`); return true;
+    }
+    // Dead human presses E while watching an alive bot of their own team -> takes its place (CS-style bot takeover).
+    // Works for the host's player, for remote humans (via HostSync 'takeover') and is requested by clients over the net.
+    requestTakeover(human) {
+      const s = human.spectateTarget; if (human.alive || !s || !s.isBot || !s.alive || s.team !== human.team) return false;
+      if (this.net && this.net.role === 'client') { this.net.sendTakeover(s.netKey); return true; }
+      return this.takeOverBot(human, s);
+    }
+    takeOverBot(human, bot) {
+      if (!bot || !bot.isBot || !bot.alive || human.alive || bot.team !== human.team || bot.takenOver) return false;
+      human.spawnAt(bot.pos.x, bot.pos.y, bot.pos.z, bot.yaw); human.pitch = bot.pitch;
+      human.health = bot.health; human.armor = bot.armor; human.helmet = bot.helmet; human.defuser = bot.defuser;
+      human.inv = bot.inv; human.hasBomb = bot.hasBomb; human.current = bot.current; human.lastWeapon = null; human.money = Math.max(human.money, bot.money);
+      for (const w of human.weaponList()) w.skin = human.skinFor(w.id); // the human's own cosmetics
+      human.select(human.current, true); human.spectateTarget = null; human.spectating = null; human.respawnT = 0;
+      if (human.isLocal) { this.vm.buildArms(human.team); this.vm.setWeapon(human.current.id, human.team, human.current.skin); }
+      // the bot sits out the rest of the round: no death event, no killfeed, no corpse
+      bot.resetInventory(); bot.hasBomb = false; bot.alive = false; bot.health = 0; bot.takenOver = true; bot.target = null; if (bot.model) bot.model.root.visible = false;
+      if (this.mode.respawnTime) bot.respawnT = this.mode.respawnTime + 2;
+      this.localChat(human, `<span class="sys">Вы играете за бота ${bot.name}</span>`);
+      if (this.net && this.net.role === 'host') this.net.broadcastChat(`<span class="sys">${human.name} взял управление ботом ${bot.name}</span>`);
+      else if (!this.net) this.hud.addChat(`<span class="sys">${human.name} взял управление ботом ${bot.name}</span>`);
+      return true;
+    }
     onActorDeath(v, attacker, weaponId, headshot) {
       const a = attacker && attacker !== v ? attacker : null;
       if (a && this.isEnemy(a, v)) {
@@ -393,6 +440,9 @@
     destroy() {
       this.running = false; S3.Audio.stopAmbient(); this.hud.setVisible(false);
       this.scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); }); this.renderer.dispose(); S3.Input.unlock();
+      // drop the relay connection, otherwise a host that went back to the menu keeps its seat on the relay
+      // and nobody can start a new match on that server until the app is closed
+      if (this.net && this.net.net) { this.net.net.onCloseCb = null; this.net.net.close(); }
     }
   }
   S3.Game = Game;

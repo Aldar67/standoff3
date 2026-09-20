@@ -41,6 +41,8 @@
     sendBuyOpen(open) { this.net.send({ t: 'buyopen', open: !!open }); }
     sendThrow(wid, strength) { this.net.send({ t: 'throw', wid, strength }); }
     sendRadio(key) { this.net.send({ t: 'radio', key }); }
+    sendTakeover(key) { this.net.send({ t: 'takeover', key }); }
+    sendChat(text) { this.net.send({ t: 'chat', text }); }
     // ---- puppets ----
     getOrCreatePuppet(entry) {
       let p = this.puppets[entry.k];
@@ -70,7 +72,8 @@
         else { p.current.ammo = entry.ammo; p.current.reserve = entry.reserve; p.current.count = entry.gcount; p.current.reloading = entry.reloading; }
         if (!p.targetPos) p.targetPos = new THREE.Vector3();
         p.targetPos.set(entry.x, entry.y, entry.z); p.targetYaw = entry.yaw; p.targetPitch = entry.pitch;
-        if (!p.alive && p.model && !p.model.dead) { p.model.die(0, 1, false); }
+        p.takenOver = !!entry.hid; if (p.model) p.model.root.visible = !entry.hid; // taken-over bots vanish instead of dropping a corpse
+        if (!p.alive && p.model && !p.model.dead && !entry.hid) { p.model.die(0, 1, false); }
         else if (p.alive && p.model && p.model.dead) { p.model.reset(); p.pos.copy(p.targetPos); }
       }
       // grenades in flight: sync any the host is still tracking that we don't yet have a puppet for

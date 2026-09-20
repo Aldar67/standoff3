@@ -16,13 +16,13 @@
     init(canvas) {
       this.canvas = canvas;
       window.addEventListener('keydown', (e) => {
-        if (e.repeat) return;
+        if (e.repeat || this.blocked) return;
         this.keys[e.code] = true; this.pressed[e.code] = true;
         if (['Tab', 'Space', 'KeyF', 'KeyB'].includes(e.code) && this.locked) e.preventDefault();
         if (e.code === 'Tab') e.preventDefault();
         if (e.altKey) e.preventDefault();
       });
-      window.addEventListener('keyup', (e) => { this.keys[e.code] = false; this.released[e.code] = true; });
+      window.addEventListener('keyup', (e) => { if (this.blocked) return; this.keys[e.code] = false; this.released[e.code] = true; });
       window.addEventListener('blur', () => { this.keys = {}; for (let i = 0; i < 3; i++) this.buttons[i] = false; });
       document.addEventListener('mousemove', (e) => {
         if (!this.locked) return;

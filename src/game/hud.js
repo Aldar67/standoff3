@@ -203,7 +203,7 @@
       // hitmarker
       if (this.hitT > 0) { this.hitT -= dt; if (this.hitT <= 0) this.hitmarker.className = 'hitmarker'; }
       // spectate text
-      if (!p.alive) { const s = p.spectateTarget; this.spectate.style.display = 'block'; this.spectate.innerHTML = s && s.alive && p.deadT > 3 ? `Наблюдение: <b style="color:${S3.TEAM_COLOR_CSS[s.team]}">${s.name}</b> — ЛКМ: следующий` + (mode.respawnTime ? ` · Возрождение через ${Math.ceil(p.respawnT)}` : '') : (mode.respawnTime && p.respawnT > 0 ? `Возрождение через ${Math.ceil(p.respawnT)}` : (p.deadT < 3 ? 'Вы погибли' : '')); }
+      if (!p.alive) { const s = p.spectateTarget; this.spectate.style.display = 'block'; this.spectate.innerHTML = s && s.alive && p.deadT > 3 ? `Наблюдение: <b style="color:${S3.TEAM_COLOR_CSS[s.team]}">${s.name}</b> — ЛКМ: следующий` + (s.isBot && s.team === p.team ? ' · <b>E</b>: играть за этого бота' : '') + (mode.respawnTime ? ` · Возрождение через ${Math.ceil(p.respawnT)}` : '') : (mode.respawnTime && p.respawnT > 0 ? `Возрождение через ${Math.ceil(p.respawnT)}` : (p.deadT < 3 ? 'Вы погибли' : '')); }
       else this.spectate.style.display = 'none';
       this.drawRadar(); this.radarName.textContent = g.regionName(p.pos.x, p.pos.z) || g.map.def.title;
       if (this.sbVisible) this.renderScoreboard();

@@ -24,7 +24,7 @@
       const sens = S.sensitivity * 0.0022 * zoomMul;
       this.yaw -= dx * sens; this.pitch -= dy * sens * (S.invertY ? -1 : 1);
       this.pitch = S3.clamp(this.pitch, -89 * S3.DEG, 89 * S3.DEG); this.yaw = S3.angleWrap(this.yaw);
-      if (!this.alive) { this.wishDir.set(0, 0, 0); this.fireHeld = false; if (I.btnPressed[0]) game.nextSpectate(); return; }
+      if (!this.alive) { this.wishDir.set(0, 0, 0); this.fireHeld = false; if (I.btnPressed[0]) game.nextSpectate(); if (I.justPressed('use') && this.deadT > 1) { if (game.requestTakeover(this)) S3.Audio.pickup(); } return; }
       const frozen = game.mode.frozen(this);
       const f = (I.down('forward') ? 1 : 0) - (I.down('back') ? 1 : 0); const r = (I.down('right') ? 1 : 0) - (I.down('left') ? 1 : 0);
       const wd = this.wishDir; wd.set(0, 0, 0);

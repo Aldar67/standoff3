@@ -94,7 +94,7 @@
       this.pos.set(x, y + 0.05, z); this.vel.set(0, 0, 0); this.yaw = yaw; this.pitch = 0; this.punchPitch = 0; this.punchYaw = 0;
       this.health = 100; this.alive = true; this.crouching = false; this.crouchAmt = 0; this.body.h = PH.height; this.body.onGround = true; this.body.jumping = false;
       this.planting = false; this.plantT = 0; this.defusing = false; this.defuseT = 0; this.flashT = 0; this.burnT = 0; this.damagers = {}; this.lastAttacker = null; this.roundKills = 0;
-      this.scoped = false; this.zoomLevel = 0; this.deadT = 0; this.spawnProtect = 0;
+      this.scoped = false; this.zoomLevel = 0; this.deadT = 0; this.spawnProtect = 0; this.takenOver = false;
       if (this.model) { this.model.reset(); this.model.root.visible = true; }
     }
     die(attacker, weaponId, headshot, dirX, dirZ) {
@@ -105,7 +105,7 @@
     }
     // ---- damage ----
     takeDamage(amount, attacker, zone, weaponId, dirX, dirZ, opts) {
-      if (!this.alive || this.spawnProtect > 0) return 0; opts = opts || {};
+      if (!this.alive || this.spawnProtect > 0 || this.god) return 0; opts = opts || {};
       const wd = S3.WEAPONS[weaponId] || {};
       let dmg = amount;
       const headshot = zone === 'head';
@@ -154,7 +154,7 @@
       }
       this.wantJump = false;
       const wasGround = b.onGround; b.landSpeed = 0;
-      this.game.world.move(b, dt);
+      if (this.noclip) { if (wl > 1e-4) this.pos.addScaledVector(wd, 12 * dt); if (this.wantCrouch) this.pos.y -= 8 * dt; if (b.jumping) this.pos.y += 8 * dt; v.set(0, 0, 0); b.onGround = true; b.jumping = false; } else this.game.world.move(b, dt);
       if (!wasGround && b.onGround) {
         if (b.landSpeed > 4) { if (this.isLocal) S3.Audio.land(); else S3.Audio.land(this.pos); this.game.emitNoise(this, 10); }
         if (b.landSpeed > PH.maxFallDamageSpeed) this.takeDamage((b.landSpeed - PH.maxFallDamageSpeed) * 12, null, 'body', 'fall', 0, 0, { ignoreArmor: true });

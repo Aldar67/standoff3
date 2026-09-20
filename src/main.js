@@ -221,8 +221,9 @@
     document.addEventListener('click', () => { S3.Audio.init(); S3.Audio.resume(); if (!game) S3.Audio.startMenuMusic(); }, { once: true });
     // canvas click to lock
     document.getElementById('game-canvas').addEventListener('click', () => { if (game && !game.paused && !game.hud.buyOpen && !game.over) S3.Input.lock(); });
-    S3.Input.onLockChange = (locked) => { if (!game) return; if (!locked && !game.hud.buyOpen && !game.paused && !game.over) { pauseGame(); } };
+    S3.Input.onLockChange = (locked) => { if (!game) return; if (!locked && !game.hud.buyOpen && !game.paused && !game.over && !S3.Console.isOpen()) { pauseGame(); } };
     window.addEventListener('keydown', (e) => {
+      if (S3.Console.handleKey(e)) return;
       if (!game) { if (e.code === 'Escape') { if (S3.CasesUI.open) S3.CasesUI.closeModal(); else showPanel('panel-main'); } return; }
       if (game.hud.buyOpen) { if (game.hud.buyKey(e.code)) e.preventDefault(); return; }
       if (e.code === 'Escape' && game.paused && !game.over) { resumeGame(); return; }
@@ -235,7 +236,13 @@
     $('#menu-version').textContent = 'v' + S3.VERSION + ' · Three.js r158 · процедурные текстуры, модели и звук';
   }
   function init() {
-    S3.Settings.load(); S3.Stats.load(); S3.Inventory.load(); bindMenu(); bindDesktop(); renderPlay(); showPanel('panel-main'); $('#menu').style.display = 'flex';
+    S3.Settings.load(); S3.Stats.load(); S3.Inventory.load(); bindMenu(); bindDesktop();
+    S3.Console.bind({
+      getGame: () => game, quitToMenu,
+      startMap: (map, mode) => { if (game) quitToMenu(); state.map = map; if (mode && S3.MODES[mode]) state.mode = mode; startGame(); },
+      restart: () => { if (!game || game.net) return; quitToMenu(); startGame(); },
+      connect: (addr) => { if (game) quitToMenu(); showPanel('panel-network'); netTabSwitch('join'); $('#net-join-addr').value = addr; joinConnect(); },
+    }); renderPlay(); showPanel('panel-main'); $('#menu').style.display = 'flex';
     if (!window.THREE) { alert('Three.js не загрузился. Проверьте файл lib/three.min.js'); }
   }
   window.addEventListener('DOMContentLoaded', init);
