@@ -28,7 +28,7 @@
       net.on('throw', (msg) => { const r = this.remotes[msg._from]; if (r && r.actor.alive) { const w = r.actor.hasGrenade(msg.wid) || (r.actor.current && r.actor.current.id === msg.wid ? r.actor.current : null); if (w) game.throwGrenade(r.actor, w, msg.strength || 1); } });
       net.on('radio', (msg) => { const r = this.remotes[msg._from]; if (r) { const rd = S3.RADIO.find((x) => x.key === msg.key); if (rd) game.radio(r.actor, rd.text); } });
       net.on('takeover', (msg) => { const r = this.remotes[msg._from]; if (!r) return; const bot = game.bots.find((b) => b.netKey === msg.key); if (bot) game.takeOverBot(r.actor, bot); });
-      net.on('chat', (msg) => { const r = this.remotes[msg._from]; if (r && typeof msg.text === 'string') game.chatFrom(r.actor, msg.text.slice(0, 120)); });
+      net.on('chat', (msg) => { const r = this.remotes[msg._from]; if (r && typeof msg.text === 'string') game.chatFrom(r.actor, msg.text.slice(0, 120), !!msg.team); });
       net.on('leave', (id) => { const r = this.remotes[id]; if (r && r.actor.alive) { r.actor.health = 0; r.actor.alive = false; if (r.actor.model) r.actor.model.root.visible = false; this.broadcastChat(`<span class="sys">${r.actor.name} отключился</span>`); } });
       net.on('hello', (msg) => { net.send({ t: 'ev', k: 'toolate', for: msg._from }); }); // match already started
     }

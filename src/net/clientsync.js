@@ -42,7 +42,7 @@
     sendThrow(wid, strength) { this.net.send({ t: 'throw', wid, strength }); }
     sendRadio(key) { this.net.send({ t: 'radio', key }); }
     sendTakeover(key) { this.net.send({ t: 'takeover', key }); }
-    sendChat(text) { this.net.send({ t: 'chat', text }); }
+    sendChat(text, team) { this.net.send({ t: 'chat', text, team: !!team }); }
     // ---- puppets ----
     getOrCreatePuppet(entry) {
       let p = this.puppets[entry.k];

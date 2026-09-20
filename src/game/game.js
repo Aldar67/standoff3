@@ -317,9 +317,10 @@
       return true;
     }
     // ---------- chat / bots / takeover ----------
-    chatFrom(actor, text) {
-      const html = `<b style="color:${S3.TEAM_COLOR_CSS[actor.team]}">${actor.name}:</b> ${text.replace(/[<>]/g, '')}`;
-      this.hud.addChat(html); if (this.net && this.net.role === 'host') this.net.broadcastChat(html);
+    chatFrom(actor, text, team) {
+      const html = `${team ? '<span class="sys">(Команда)</span> ' : ''}<b style="color:${S3.TEAM_COLOR_CSS[actor.team]}">${actor.name}:</b> ${text.replace(/[<>]/g, '')}`;
+      if (!team || actor.team === this.player.team) this.hud.addChat(html);
+      if (this.net && this.net.role === 'host') { if (!team) this.net.broadcastChat(html); else for (const id in this.net.remotes) { const r = this.net.remotes[id].actor; if (r.team === actor.team) this.net.sendPrivateChat(r, html); } }
     }
     addBot(team, difficulty) {
       const o = this.opts; if (!team) { const ct = this.actors.filter((a) => a.team === 'CT').length, t = this.actors.filter((a) => a.team === 'T').length; team = ct <= t ? 'CT' : 'T'; }

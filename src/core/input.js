@@ -11,8 +11,13 @@
       forward: ['KeyW', 'ArrowUp'], back: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'],
       jump: ['Space'], crouch: ['ControlLeft', 'KeyC'], walk: ['ShiftLeft'], reload: ['KeyR'], use: ['KeyE'], drop: ['KeyG'],
       buy: ['KeyB'], scoreboard: ['Tab'], lastWeapon: ['KeyQ'], slot1: ['Digit1'], slot2: ['Digit2'], slot3: ['Digit3'], slot4: ['Digit4'], slot5: ['Digit5'],
-      inspect: ['KeyF'], radio: ['KeyZ'], chat: ['KeyY'], pause: ['Escape'],
+      inspect: ['KeyF'], radio: ['KeyZ'], chat: ['KeyY'], teamchat: ['KeyU'], voice: ['KeyK'], pause: ['Escape'],
     },
+    // human-readable names + order for the rebinding UI
+    ACTIONS: [['forward', 'Вперёд'], ['back', 'Назад'], ['left', 'Влево'], ['right', 'Вправо'], ['jump', 'Прыжок'], ['crouch', 'Присед'], ['walk', 'Тихий шаг'], ['reload', 'Перезарядка'], ['use', 'Использовать / подобрать / играть за бота'], ['drop', 'Выбросить оружие'], ['buy', 'Магазин'], ['scoreboard', 'Таблица'], ['lastWeapon', 'Предыдущее оружие'], ['slot1', 'Слот 1 — основное'], ['slot2', 'Слот 2 — пистолет'], ['slot3', 'Слот 3 — нож'], ['slot4', 'Слот 4 — гранаты'], ['slot5', 'Слот 5 — бомба'], ['inspect', 'Осмотр оружия'], ['radio', 'Радио'], ['chat', 'Чат всем'], ['teamchat', 'Чат команде'], ['voice', 'Говорить (голос)']],
+    defaultBindings: null,
+    applyBindings(saved) { if (!this.defaultBindings) this.defaultBindings = JSON.parse(JSON.stringify(this.bindings)); const b = JSON.parse(JSON.stringify(this.defaultBindings)); for (const k in (saved || {})) if (b[k] && Array.isArray(saved[k]) && saved[k].length) b[k] = saved[k].slice(); this.bindings = b; },
+    keyName(code) { if (!code) return '—'; const m = { Space: 'Space', ControlLeft: 'Ctrl', ControlRight: 'Правый Ctrl', ShiftLeft: 'Shift', ShiftRight: 'Правый Shift', AltLeft: 'Alt', AltRight: 'Правый Alt', Tab: 'Tab', Escape: 'Esc', Enter: 'Enter', Backquote: '`', CapsLock: 'Caps', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backslash: '\\' }; if (m[code]) return m[code]; if (code.startsWith('Key')) return code.slice(3); if (code.startsWith('Digit')) return code.slice(5); if (code.startsWith('Numpad')) return 'Num ' + code.slice(6); return code; },
     init(canvas) {
       this.canvas = canvas;
       window.addEventListener('keydown', (e) => {

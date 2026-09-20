@@ -32,6 +32,10 @@
       this.hpFill = this.bl.querySelector('#hp-fill'); this.hpVal = this.bl.querySelector('#hp-val'); this.arFill = this.bl.querySelector('#ar-fill'); this.arVal = this.bl.querySelector('#ar-val');
       // chat
       this.chat = el('div', 'chat', root);
+      // text chat input (Y / U): pointer lock stays on, keys go to the box while it is open
+      this.chatBox = el('div', 'chat-input-box', root); this.chatBox.style.display = 'none'; this.chatLabel = el('span', 'chat-label', this.chatBox, 'Всем:'); this.chatInput = el('input', 'chat-input', this.chatBox); this.chatInput.type = 'text'; this.chatInput.maxLength = 120; this.chatInput.autocomplete = 'off'; this.chatOpen = false; this.chatTeam = false;
+      this.chatInput.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.code === 'Enter') { this.submitChat(); e.preventDefault(); } else if (e.code === 'Escape') { this.closeChat(); e.preventDefault(); } });
+      this.voiceBox = el('div', 'voice-box', root); this.voiceBox.style.display = 'none';
       // bottom right: ammo + weapon
       this.br = el('div', 'hud-br', root);
       this.br.innerHTML = '<div class="money" id="money">$800</div><div class="weapon-name" id="weapon-name">Нож</div><div class="ammo"><span class="mag" id="ammo-mag">30</span><span class="sep">/</span><span class="res" id="ammo-res">90</span></div><div class="slots" id="slots"></div>';
@@ -57,6 +61,7 @@
       this.cross.style.setProperty('--cc', c); this.cross.style.setProperty('--cs', size + 'px'); this.cross.style.setProperty('--cg', gap + 'px'); this.cross.style.setProperty('--ct', th + 'px');
       this.cross.querySelector('.dot').style.display = S.crosshairDot ? 'block' : 'none';
       this.root.style.setProperty('--hudscale', S.hudScale); this.fps.style.display = S.showFps ? 'block' : 'none';
+      const rs = S.radarSize || 230; this.radar.width = rs; this.radar.height = rs; this.radar.style.width = rs + 'px'; this.radar.style.height = rs + 'px'; this.radarBox.style.width = rs + 'px'; this.radar.style.borderRadius = S.radarSquare === false ? '50%' : '12px';
     }
     setVisible(v) { this.visible = v; this.root.style.display = v ? 'block' : 'none'; }
     // ---- feedback ----
@@ -75,6 +80,11 @@
       this.banner.textContent = text; this.banner.style.color = color || '#fff'; this.banner.classList.add('show'); this.sub.textContent = sub || ''; this.sub.classList.toggle('show', !!sub);
       if (this.bannerTimer) clearTimeout(this.bannerTimer); this.bannerTimer = setTimeout(() => { this.banner.classList.remove('show'); this.sub.classList.remove('show'); }, (dur || 3) * 1000);
     }
+    openChat(team) { if (this.chatOpen) return; this.chatOpen = true; this.chatTeam = !!team; this.chatLabel.textContent = team ? 'Команде:' : 'Всем:'; this.chatBox.style.display = 'flex'; this.chatInput.value = ''; S3.Input.blocked = true; S3.Input.keys = {}; setTimeout(() => this.chatInput.focus(), 0); }
+    closeChat() { this.chatOpen = false; this.chatBox.style.display = 'none'; this.chatInput.blur(); S3.Input.blocked = S3.Console && S3.Console.isOpen ? S3.Console.isOpen() : false; if (S3.Input.canvas) S3.Input.canvas.focus(); }
+    submitChat() { const text = this.chatInput.value.trim(); const team = this.chatTeam; this.closeChat(); if (!text) return; const g = this.game; if (g.net && g.net.role === 'client') g.net.sendChat(text, team); else g.chatFrom(g.player, text, team); }
+    // who is talking (voice chat) -- names with a mic icon, kept for ~0.4 s after the last packet
+    showTalking(names) { if (!names.length) { this.voiceBox.style.display = 'none'; return; } this.voiceBox.style.display = 'block'; this.voiceBox.innerHTML = names.map((n) => `<div>🎤 ${n}</div>`).join(''); }
     addChat(html, cls) { const m = el('div', 'chat-msg ' + (cls || ''), this.chat); m.innerHTML = html; setTimeout(() => { m.classList.add('fade'); setTimeout(() => m.remove(), 600); }, 9000); while (this.chat.children.length > 7) this.chat.firstChild.remove(); }
     setHint(text) { this.hint.textContent = text || ''; this.hint.style.display = text ? 'block' : 'none'; }
     setProgress(label, frac) { if (frac === null || frac === undefined) { this.progress.style.display = 'none'; return; } this.progress.style.display = 'block'; this.progress.querySelector('.plabel').textContent = label; this.progress.querySelector('.pfill').style.width = (frac * 100) + '%'; }
@@ -129,40 +139,53 @@
       else { const ids = S3.BUY_CATEGORIES[this.buyCat].ids; if (k < ids.length) this.tryBuy(ids[k]); this.buyPick = undefined; }
       return true;
     }
-    // ---- radar ----
+    // ---- radar (CS2-style: square, rotates with you, view cone, teammates with facing, spotted enemies with fade) ----
     drawRadar() {
-      const g = this.game, p = g.player, map = g.map; const ctx = this.rctx; const S = 200; const R = S / 2; const scale = 4.2; // px per meter
-      ctx.clearRect(0, 0, S, S); ctx.save(); ctx.beginPath(); ctx.arc(R, R, R - 2, 0, Math.PI * 2); ctx.clip();
-      ctx.fillStyle = 'rgba(8,12,18,0.85)'; ctx.fillRect(0, 0, S, S);
-      const cam = p.alive || !p.spectateTarget ? p : p.spectateTarget; const px = cam.pos.x, pz = cam.pos.z, yaw = cam.yaw;
-      ctx.translate(R, R); ctx.rotate(yaw); ctx.scale(scale, scale); ctx.translate(-px, -pz);
-      // minimap image: world coords -> image coords
+      const g = this.game, p = g.player, map = g.map; const ctx = this.rctx; const S3S = S3.Settings.data;
+      const S = this.radar.width; const R = S / 2; const scale = S3S.radarZoom || 4.2; const rotate = S3S.radarRotate !== false; const square = S3S.radarSquare !== false;
+      ctx.clearRect(0, 0, S, S); ctx.save();
+      if (square) { const rr = 12; ctx.beginPath(); ctx.moveTo(rr, 0); ctx.arcTo(S, 0, S, S, rr); ctx.arcTo(S, S, 0, S, rr); ctx.arcTo(0, S, 0, 0, rr); ctx.arcTo(0, 0, S, 0, rr); ctx.closePath(); ctx.clip(); }
+      else { ctx.beginPath(); ctx.arc(R, R, R - 2, 0, Math.PI * 2); ctx.clip(); }
+      ctx.fillStyle = 'rgba(8,12,18,0.82)'; ctx.fillRect(0, 0, S, S);
+      const cam = p.alive || !p.spectateTarget ? p : p.spectateTarget; const px = cam.pos.x, pz = cam.pos.z, yaw = cam.yaw; const rot = rotate ? yaw : 0;
+      ctx.translate(R, R); ctx.rotate(rot); ctx.scale(scale, scale); ctx.translate(-px, -pz);
       const ms = map.minimapScale; const b = map.bounds; const imgW = map.minimap.width;
       ctx.drawImage(map.minimap, 0, 0, imgW, imgW, b.xmin, b.zmin, imgW / ms, imgW / ms);
-      // sites
-      ctx.font = 'bold 4px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      for (const s of map.sites) { ctx.save(); ctx.translate(s.cx, s.cz); ctx.rotate(-yaw); ctx.fillStyle = 'rgba(255,220,100,0.95)'; ctx.fillText(s.name, 0, 0); ctx.restore(); }
-      // bomb
-      const mode = g.mode;
-      if (mode.bombPlanted && mode.bombPos) { ctx.save(); ctx.translate(mode.bombPos.x, mode.bombPos.z); ctx.rotate(-yaw); ctx.fillStyle = (Math.floor(g.time * 4) % 2) ? '#ff3030' : '#ffa030'; ctx.beginPath(); ctx.arc(0, 0, 1.2, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
-      else if (mode.bombDropped) { ctx.save(); ctx.translate(mode.bombDropped.pos.x, mode.bombDropped.pos.z); ctx.rotate(-yaw); ctx.fillStyle = '#ffd040'; ctx.fillRect(-0.8, -0.8, 1.6, 1.6); ctx.restore(); }
+      const label = (x, z, text, color, size) => { ctx.save(); ctx.translate(x, z); ctx.rotate(-rot); ctx.font = 'bold ' + (size || 4) + 'px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = color; ctx.fillText(text, 0, 0); ctx.restore(); };
+      for (const s of map.sites) label(s.cx, s.cz, s.name, 'rgba(255,220,100,0.95)', 5);
+      const mode = g.mode; const t = g.time;
+      // bomb: planted (pulsing) / dropped
+      if (mode.bombPlanted && mode.bombPos) { ctx.save(); ctx.translate(mode.bombPos.x, mode.bombPos.z); ctx.rotate(Math.PI / 4); const pulse = 1.2 + Math.sin(t * 8) * 0.3; ctx.fillStyle = (Math.floor(t * 4) % 2) ? '#ff3030' : '#ffa030'; ctx.fillRect(-pulse, -pulse, pulse * 2, pulse * 2); ctx.restore(); }
+      else if (mode.bombDropped) { ctx.save(); ctx.translate(mode.bombDropped.pos.x, mode.bombDropped.pos.z); ctx.fillStyle = '#ffd040'; ctx.fillRect(-1, -1, 2, 2); ctx.restore(); label(mode.bombDropped.pos.x, mode.bombDropped.pos.z, 'C4', '#201800', 2.2); }
       // actors
+      this.radarMem = this.radarMem || {};
       for (const a of g.actors) {
         if (a === cam) continue; const mate = a.team === p.team && mode.id !== 'ffa';
-        let show = mate || (a.alive && g.visibleToTeam(a, p.team)) ; if (!a.alive && !mate) continue;
-        if (!show) continue;
-        ctx.save(); ctx.translate(a.pos.x, a.pos.z); ctx.rotate(-yaw);
-        if (!a.alive) { ctx.fillStyle = 'rgba(200,200,200,0.5)'; ctx.font = 'bold 3px Arial'; ctx.fillText('✕', 0, 0); ctx.restore(); continue; }
-        ctx.rotate(yaw); ctx.rotate(-a.yaw);
-        ctx.fillStyle = mate ? (a.hasBomb ? '#ffd040' : '#4aa0ff') : '#ff4040'; ctx.beginPath(); ctx.moveTo(0, -1.6); ctx.lineTo(1.0, 0.9); ctx.lineTo(-1.0, 0.9); ctx.closePath(); ctx.fill();
+        const spotted = a.alive && !mate && g.visibleToTeam(a, p.team);
+        if (spotted) this.radarMem[a.id] = { x: a.pos.x, z: a.pos.z, t };
+        if (!mate && !spotted) { const m = this.radarMem[a.id]; if (m && a.alive && t - m.t < 4) { const f = 1 - (t - m.t) / 4; ctx.save(); ctx.globalAlpha = 0.25 + 0.55 * f; label(m.x, m.z, '?', '#ff6a5a', 4.5); ctx.restore(); } continue; }
+        if (!a.alive) { if (mate) label(a.pos.x, a.pos.z, '✕', 'rgba(200,200,200,0.55)', 3.5); continue; }
+        ctx.save(); ctx.translate(a.pos.x, a.pos.z);
+        const col = mate ? (a.hasBomb ? '#ffd040' : '#4aa0ff') : '#ff4040';
+        // facing tick
+        ctx.save(); ctx.rotate(-a.yaw); ctx.strokeStyle = col; ctx.lineWidth = 0.45; ctx.beginPath(); ctx.moveTo(0, -1.3); ctx.lineTo(0, -2.6); ctx.stroke(); ctx.restore();
+        ctx.fillStyle = col; ctx.beginPath(); ctx.arc(0, 0, 1.3, 0, Math.PI * 2); ctx.fill();
+        if (mate) { ctx.strokeStyle = a.health > 60 ? 'rgba(255,255,255,0.9)' : (a.health > 30 ? '#ffb040' : '#ff5050'); ctx.lineWidth = 0.35; ctx.beginPath(); ctx.arc(0, 0, 1.3, 0, Math.PI * 2); ctx.stroke(); }
         ctx.restore();
+        if (mate && a.hasBomb) label(a.pos.x, a.pos.z, 'C4', '#201800', 1.8);
       }
+      // you: view cone + arrow
+      ctx.save(); ctx.translate(px, pz); ctx.rotate(-yaw);
+      const fov = (S3.Settings.data.fov || 80) * S3.DEG * 0.5; const cone = ctx.createRadialGradient(0, 0, 0, 0, 0, 22); cone.addColorStop(0, 'rgba(255,255,255,0.22)'); cone.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = cone; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 22, -Math.PI / 2 - fov, -Math.PI / 2 + fov); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(0, -2.0); ctx.lineTo(1.3, 1.2); ctx.lineTo(0, 0.5); ctx.lineTo(-1.3, 1.2); ctx.closePath(); ctx.fill();
       ctx.restore();
-      // player arrow
-      ctx.save(); ctx.translate(R, R); ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(0, -7); ctx.lineTo(5, 5); ctx.lineTo(0, 2); ctx.lineTo(-5, 5); ctx.closePath(); ctx.fill(); ctx.restore();
-      // view cone
-      ctx.save(); ctx.translate(R, R); ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, R, -Math.PI / 2 - 0.6, -Math.PI / 2 + 0.6); ctx.closePath(); ctx.fill(); ctx.restore();
-      ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(R, R, R - 2, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      // frame + north marker (screen space)
+      ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 2;
+      if (square) { ctx.strokeRect(1, 1, S - 2, S - 2); } else { ctx.beginPath(); ctx.arc(R, R, R - 2, 0, Math.PI * 2); ctx.stroke(); }
+      if (rotate) { ctx.translate(R, R); ctx.rotate(rot); ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.font = 'bold 12px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('N', 0, -R + 12); }
+      ctx.restore();
     }
     // ---- per-frame ----
     update(dt) {

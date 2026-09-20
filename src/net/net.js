@@ -18,7 +18,7 @@
         try { ws = new WebSocket(url); } catch (e) { reject(e); return; }
         this.ws = ws;
         const timeout = setTimeout(() => { if (!settled) { settled = true; try { ws.close(); } catch (e) { } reject(new Error('timeout')); } }, 6000);
-        ws.onopen = () => { this.connected = true; if (wantHost) this.send({ t: 'hostclaim', name: this.name, room: this.room, pass: this.pass }); else this.send({ t: 'hello', name: this.name, room: this.room, pass: this.pass, skins: this.skins || {} }); };
+        ws.onopen = () => { this.connected = true; if (wantHost) this.send({ t: 'hostclaim', name: this.name, room: this.room, pass: this.pass, ver: S3.VERSION }); else this.send({ t: 'hello', name: this.name, room: this.room, pass: this.pass, ver: S3.VERSION, skins: this.skins || {} }); };
         ws.onmessage = (ev) => {
           let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
           if (msg.t === 'welcome') {
@@ -34,7 +34,7 @@
               else { try { ws.close(); } catch (e) { } reject(new Error('busy')); } // somebody else already holds the host seat on this relay
             } else if (!wantHost) {
               // the host appeared after we joined: our hello was dropped by the relay, send it again so we show up in the lobby
-              if (had !== this.hostId) this.send({ t: 'hello', name: this.name, room: this.room, pass: this.pass, skins: this.skins || {} });
+              if (had !== this.hostId) this.send({ t: 'hello', name: this.name, room: this.room, pass: this.pass, ver: S3.VERSION, skins: this.skins || {} });
               if (this.handlers.hostset) this.handlers.hostset(msg);
             }
           } else if (msg.t === 'sys' && msg.event === 'hostleft') { this.hostId = null; if (this.handlers.hostleft) this.handlers.hostleft(); }

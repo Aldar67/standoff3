@@ -131,6 +131,7 @@ S3.Settings = {
     sensitivity: 1.0, fov: 80, volume: 0.7, music: 0.4, shadows: true, quality: 'high', crosshairColor: '#33ff66',
     crosshairSize: 6, crosshairGap: 4, crosshairThick: 2, crosshairDot: false, lang: 'ru', invertY: false, resScale: 1.0, showFps: false,
     crouchToggle: false, hudScale: 1.0, playerName: 'Игрок', netHostAddr: '', netJoinAddr: '',
+    voiceVolume: 1.0, voiceEnabled: true, voiceMuteOthers: false, radarSize: 230, radarZoom: 4.2, radarRotate: true, radarSquare: true, bindings: {},
   },
   load() { try { const s = localStorage.getItem('standoff3_settings'); if (s) Object.assign(this.data, JSON.parse(s)); } catch (e) { } return this.data; },
   save() { try { localStorage.setItem('standoff3_settings', JSON.stringify(this.data)); } catch (e) { } },

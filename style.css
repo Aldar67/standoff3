@@ -297,3 +297,24 @@ input[type=range] { accent-color: #ffb040; width: 180px; }
 .room-row.started { opacity: 0.6; }
 .room-name { font-weight: 700; }
 .room-info { font-size: 12px; color: #9ab; }
+/* ---------- settings tabs & key binds ---------- */
+.stabs { margin-bottom: 10px; }
+.stab-pane { display: flex; flex-direction: column; gap: 12px; }
+.binds { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; }
+.bind-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 14px; color: #ccd; padding: 4px 0; border-bottom: 1px solid rgba(42,58,76,0.6); }
+.bind-key { background: #141c26; border: 1px solid #2a3a4c; color: #ffd070; font-family: inherit; font-size: 13px; padding: 5px 12px; border-radius: 6px; cursor: pointer; min-width: 110px; }
+.bind-key:hover { border-color: #5a7a9c; }
+.bind-key.wait { border-color: #ffb040; background: #2a2416; color: #fff; animation: blink 0.8s infinite; }
+@keyframes blink { 50% { opacity: 0.5; } }
+/* ---------- chat input & voice ---------- */
+.chat-input-box { position: absolute; left: 16px; bottom: 90px; display: flex; align-items: center; gap: 8px; background: rgba(8,12,18,0.85); border: 1px solid #3a4a5c; border-radius: 6px; padding: 6px 10px; pointer-events: auto !important; width: 520px; }
+.chat-label { color: #ffd070; font-weight: 700; font-size: 0.9em; white-space: nowrap; }
+.chat-input { flex: 1; background: transparent; border: none; outline: none; color: #e8edf2; font: inherit; }
+.voice-box { position: absolute; right: 16px; top: 120px; display: flex; flex-direction: column; gap: 4px; font-size: 0.95em; color: #cfe; text-shadow: 0 1px 3px #000; text-align: right; }
+.voice-box div { background: rgba(8,12,18,0.6); padding: 3px 8px; border-radius: 4px; }
+/* ---------- version check ---------- */
+.net-version { padding: 10px 14px; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
+.net-version.warn { background: rgba(255, 176, 64, 0.12); border: 1px solid #ffb040; color: #ffd070; }
+.net-version.warn a { color: #fff; font-weight: 700; }
+.net-version.ok { background: rgba(80, 200, 120, 0.08); border: 1px solid #3a6a4a; color: #8fd8a0; }
+.np-ver { color: #ff7060; font-size: 12px; margin-left: 8px; }

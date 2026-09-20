@@ -185,6 +185,14 @@ class State:
             else:
                 self.send_to(cid, {"t": "sys", "event": "nohost"})
             return
+        if t == 'voice':
+            with self.lock:
+                code = self.room_of.get(cid)
+                room = self.rooms.get(code) if code else None
+                members = [m for m in room["members"] if m != cid] if room else []
+            msg['_from'] = cid
+            self.send_many(members, msg)
+            return
         if t == 'rooms':
             with self.lock:
                 lst = [{"code": c, "host": self.names.get(r["host"], '?') if r["host"] is not None else None,
