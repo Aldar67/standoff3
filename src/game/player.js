@@ -93,12 +93,13 @@
       let px = this.pos.x, py = this.pos.y + eye - this.landDip + bobY, pz = this.pos.z;
       if (!this.alive) { // death cam: fall to ground & look at killer / spectate
         const t = Math.min(1, this.deadT / 0.8); py = this.pos.y + S3.lerp(eye, 0.35, t);
-        if (this.spectateTarget && this.spectateTarget.alive && this.deadT > 3) { const s = this.spectateTarget; px = s.pos.x; py = s.pos.y + s.eyeHeight; pz = s.pos.z; this.yaw = s.yaw; this.pitch = s.pitch; }
-      }
+        if (this.spectateTarget && this.spectateTarget.alive && this.deadT > 3) { const s = this.spectateTarget; px = s.pos.x; py = s.pos.y + s.eyeHeight; pz = s.pos.z; this.yaw = s.yaw; this.pitch = s.pitch; this.spectating = s; }
+        else this.spectating = null;
+      } else this.spectating = null;
       const rx = Math.cos(this.yaw) * bobX, rz = -Math.sin(this.yaw) * bobX;
       camera.position.set(px + rx, py, pz + rz);
       const roll = S3.damp(this.viewRoll || 0, -(this.vel.x * Math.cos(this.yaw) - this.vel.z * Math.sin(this.yaw)) * 0.003, 8, dt); this.viewRoll = roll;
-      camera.rotation.set(0, 0, 0, 'YXZ'); camera.rotation.y = this.yaw + this.punchYaw * S3.DEG; camera.rotation.x = this.pitch + this.punchPitch * S3.DEG; camera.rotation.z = roll + (!this.alive ? Math.min(1, this.deadT / 0.8) * 0.6 : 0);
+      camera.rotation.set(0, 0, 0, 'YXZ'); camera.rotation.y = this.yaw + this.punchYaw * S3.DEG; camera.rotation.x = this.pitch + this.punchPitch * S3.DEG; camera.rotation.z = this.spectating ? 0 : roll + (!this.alive ? Math.min(1, this.deadT / 0.8) * 0.6 : 0); // no death tilt once we watch through a teammate's eyes
       let fov = S.fov; if (this.scoped && w && w.def.zoom) fov = w.def.zoom[Math.min(this.zoomLevel, w.def.zoom.length) - 1] || 40;
       this.fovZoom = S3.damp(this.fovZoom, fov, 18, dt);
       if (Math.abs(camera.fov - this.fovZoom) > 0.01) { camera.fov = this.fovZoom; camera.updateProjectionMatrix(); }

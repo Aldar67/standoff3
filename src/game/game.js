@@ -383,7 +383,11 @@
       if (p.alive && this.hud.hint.style.display === 'block') { this.hud.hintT = (this.hud.hintT || 0) + dt; if (this.hud.hintT > 0.3) { this.hud.setHint(''); this.hud.hintT = 0; } }
     }
     render(dt) {
-      const r = this.renderer; r.clear(); r.render(this.scene, this.camera); r.clearDepth(); if (this.vm.root.visible) r.render(this.vm.scene, this.vm.camera);
+      const r = this.renderer; r.clear();
+      // while spectating from a teammate's eyes, hide their own body so it doesn't fill the view
+      const spec = this.player.spectating; const specModel = spec && spec.model ? spec.model.root : null; const specVis = specModel ? specModel.visible : false; if (specModel) specModel.visible = false;
+      r.render(this.scene, this.camera); if (specModel) specModel.visible = specVis;
+      r.clearDepth(); if (this.vm.root.visible) r.render(this.vm.scene, this.vm.camera);
     }
     setPaused(v) { this.paused = v; if (v) S3.Input.unlock(); }
     destroy() {

@@ -29,7 +29,11 @@
       const root = new THREE.Group(); this.root = root;
       const mU = mat(sk.uniform), mV = mat(sk.vest), mS = mat(sk.skin), mP = mat(sk.pants), mB = mat(sk.boots), mH = mat(sk.helmet);
       // torso pivot at hips (y=0.95)
-      this.hips = new THREE.Group(); this.hips.position.y = 0.95; root.add(this.hips);
+      // The rig is modelled with its face/hands/toes on +Z, but actors look and move along -Z (yaw 0).
+      // This flip group turns the whole body around once, so root.rotation.y can simply be the actor's yaw.
+      // (Without it every character faced away from where it was looking/walking -- the "moonwalk" bug.)
+      this.flip = new THREE.Group(); this.flip.rotation.y = Math.PI; root.add(this.flip);
+      this.hips = new THREE.Group(); this.hips.position.y = 0.95; this.flip.add(this.hips);
       this.torso = new THREE.Group(); this.hips.add(this.torso);
       const chest = box(0.44, 0.6, 0.26, mU, 0, 0.32, 0); this.torso.add(chest);
       const vest = box(0.46, 0.4, 0.3, mV, 0, 0.36, 0); this.torso.add(vest);
@@ -74,7 +78,7 @@
       const m = S3.buildWeaponModel(w, 0.85, skinId);
       // weapon models point down -Z; the forearm's "down the arm" axis is -Y, so tip the model 90deg so the barrel
       // continues along the raised arm (rotation 0 left every third-person gun hanging straight down from the fist)
-      m.rotation.set(Math.PI / 2, 0, 0); m.position.set(0.02, -0.02, 0.06); this.weaponMesh = m; this.weaponHolder.add(m);
+      m.rotation.set(-Math.PI / 2, 0, Math.PI); m.position.set(0.02, -0.02, 0.06); this.weaponMesh = m; this.weaponHolder.add(m);
     }
     // pose: moving speed (0..1), crouch (0..1), aim pitch (rad), dt
     update(dt, speed, crouch, pitch, firing, twist) {
@@ -175,7 +179,7 @@
     const headY = 1.68 - c * 0.5; const headT = S3.raySphere(lox, loy, loz, ldx, ldy, ldz, 0, headY, 0.02, 0.17, maxT);
     const bodyBox = { min: { x: -0.25, y: 0.95 - c * 0.45, z: -0.16 }, max: { x: 0.25, y: 1.55 - c * 0.5, z: 0.16 } };
     const legsBox = { min: { x: -0.24, y: 0, z: -0.16 }, max: { x: 0.24, y: 0.95 - c * 0.45, z: 0.16 } };
-    const armsBox = { min: { x: -0.38, y: 1.0 - c * 0.45, z: -0.2 }, max: { x: 0.38, y: 1.5 - c * 0.5, z: 0.35 } };
+    const armsBox = { min: { x: -0.38, y: 1.0 - c * 0.45, z: -0.35 }, max: { x: 0.38, y: 1.5 - c * 0.5, z: 0.2 } };
     const bodyT = S3.rayAABB(lox, loy, loz, ldx, ldy, ldz, bodyBox, maxT, null);
     const legsT = S3.rayAABB(lox, loy, loz, ldx, ldy, ldz, legsBox, maxT, null);
     const armsT = S3.rayAABB(lox, loy, loz, ldx, ldy, ldz, armsBox, maxT, null);
