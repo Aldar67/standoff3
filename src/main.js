@@ -150,7 +150,11 @@
       net.conn = n; net.role = 'host';
       status.textContent = 'Сервер подключен. Настройте матч и нажмите «Начать игру».'; status.className = 'net-status ok';
       $('#net-lobby').style.display = 'block'; renderNetLobby();
-    }).catch((e) => { status.textContent = 'Не удалось подключиться — убедитесь, что запущен Standoff3-Host.bat. (' + e.message + ')'; status.className = 'net-status err'; });
+    }).catch((e) => {
+      status.className = 'net-status err';
+      if (e.message === 'busy') status.textContent = 'На этом сервере уже есть хост — кто-то другой создал игру. Подключитесь к нему через вкладку «Присоединиться», либо пусть он выйдет в меню (или закроет игру).';
+      else status.textContent = 'Не удалось подключиться к серверу ' + addr + ' (' + e.message + '). Проверьте адрес и что сервер запущен.';
+    });
   }
   function netStartGame() {
     if (!net.conn) return;
@@ -172,8 +176,9 @@
         startGame({ map: msg.map, mode: msg.mode, rounds: msg.rounds, killLimit: msg.killLimit, timeLimit: msg.timeLimit, botsPerTeam: msg.botsPerTeam, difficulty: msg.difficulty, net: { role: 'client', net: connForGame, myTeam: me ? me.team : 'CT' } });
       } else if (msg.k === 'toolate' && msg.for === n.myId) { status.textContent = 'Хост уже начал матч. Дождитесь следующего.'; status.className = 'net-status err'; }
     });
-    n.on('hostleft', () => { if (!game) { status.textContent = 'Хост отключился.'; status.className = 'net-status err'; } });
-    n.connect(addr, name, false).then(() => { net.conn = n; net.role = 'client'; status.textContent = 'Подключено. Ожидание запуска матча хостом...'; status.className = 'net-status ok'; })
+    n.on('hostleft', () => { if (!game) { status.textContent = 'Хост вышел. Ждём, пока кто-нибудь создаст игру...'; status.className = 'net-status'; } });
+    n.on('hostset', () => { if (!game) { status.textContent = 'Хост создал игру — вы в лобби. Ожидание запуска матча...'; status.className = 'net-status ok'; } });
+    n.connect(addr, name, false).then(() => { net.conn = n; net.role = 'client'; status.textContent = n.hostId !== null && n.hostId !== undefined ? 'Подключено. Ожидание запуска матча хостом...' : 'Подключено к серверу. Хост ещё не создал игру — как только создаст, вы попадёте в лобби.'; status.className = 'net-status ok'; })
       .catch((e) => { status.textContent = 'Не удалось подключиться (' + e.message + ')'; status.className = 'net-status err'; });
   }
   // Desktop build (Electron): config.json carries the relay address of the owner's VPS; it becomes the default for

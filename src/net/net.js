@@ -21,10 +21,22 @@
         ws.onopen = () => { this.connected = true; if (wantHost) this.send({ t: 'hostclaim', name: this.name }); else this.send({ t: 'hello', name: this.name, skins: this.skins || {} }); };
         ws.onmessage = (ev) => {
           let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
-          if (msg.t === 'welcome') { this.myId = msg.id; }
+          if (msg.t === 'welcome') {
+            this.myId = msg.id;
+            // a joining player is "connected" as soon as the relay greets them, even if nobody has created a game yet
+            if (!wantHost && !settled) { settled = true; clearTimeout(timeout); this.role = 'client'; this.hostId = null; resolve(this); }
+          }
           else if (msg.t === 'sys' && msg.event === 'hostset') {
-            this.hostId = msg.id;
-            if (!settled) { settled = true; clearTimeout(timeout); this.role = (this.myId === this.hostId) ? 'host' : 'client'; resolve(this); }
+            const had = this.hostId; this.hostId = msg.id;
+            if (wantHost && !settled) {
+              settled = true; clearTimeout(timeout);
+              if (this.myId === this.hostId) { this.role = 'host'; resolve(this); }
+              else { try { ws.close(); } catch (e) { } reject(new Error('busy')); } // somebody else already holds the host seat on this relay
+            } else if (!wantHost) {
+              // the host appeared after we joined: our hello was dropped by the relay, send it again so we show up in the lobby
+              if (had !== this.hostId) this.send({ t: 'hello', name: this.name, skins: this.skins || {} });
+              if (this.handlers.hostset) this.handlers.hostset(msg);
+            }
           } else if (msg.t === 'sys' && msg.event === 'hostleft') { if (this.handlers.hostleft) this.handlers.hostleft(); }
           else if (msg.t === 'sys' && msg.event === 'leave') { if (this.handlers.leave) this.handlers.leave(msg.id); }
           else { const h = this.handlers[msg.t]; if (h) h(msg); else if (this.handlers.message) this.handlers.message(msg); }
