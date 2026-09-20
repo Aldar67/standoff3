@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Standoff 3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game-canvas"></canvas>
+<div id="hud" style="display:none"></div>
+<div id="loading" style="display:none"><div class="spinner"></div><div>Загрузка карты и генерация текстур...</div></div>
+
+<div id="menu">
+  <div class="menu-bg"></div>
+  <div class="logo"><span class="logo-a">STANDOFF</span><span class="logo-b">3</span><div class="logo-sub">PC EDITION · BOTS</div></div>
+  <div id="panel-main" class="panel">
+    <button class="mbtn big hover-snd" data-panel="panel-play">▶ Играть</button>
+    <button class="mbtn hover-snd" data-panel="panel-settings">Настройки</button>
+    <button class="mbtn hover-snd" data-panel="panel-stats">Статистика</button>
+    <button class="mbtn hover-snd" data-panel="panel-controls">Управление</button>
+    <button class="mbtn hover-snd" data-panel="panel-about">Об игре</button>
+    <div id="menu-version" class="version"></div>
+  </div>
+
+  <div id="panel-play" class="panel wide">
+    <div class="panel-title">Новый матч <button class="back hover-snd" data-panel="panel-main">← Назад</button></div>
+    <div class="section-lbl">Режим</div><div id="mode-list" class="cards"></div>
+    <div class="section-lbl">Карта</div><div id="map-list" class="cards maps"></div>
+    <div class="rows">
+      <div class="row"><span>Команда</span><div id="team-sel" class="opts"><div class="opt" data-team="CT">Спецназ (CT)</div><div class="opt" data-team="T">Террористы (T)</div><div class="opt" data-team="random">Случайно</div></div></div>
+      <div class="row"><span>Боты</span><div class="opts"><input id="bots-range" type="range" min="1" max="8" value="5"><span id="bots-val" class="rv">5 на команду</span></div></div>
+      <div class="row"><span>Сложность ботов</span><div id="diff-sel" class="opts"><div class="opt" data-diff="easy">Лёгкий</div><div class="opt" data-diff="medium">Средний</div><div class="opt" data-diff="hard">Сложный</div><div class="opt" data-diff="expert">Эксперт</div></div></div>
+      <div class="row" id="rounds-row"><span>Раундов (макс.)</span><div id="rounds-sel" class="opts"><div class="opt" data-r="6">6</div><div class="opt" data-r="10">10</div><div class="opt" data-r="16">16</div><div class="opt" data-r="24">24</div></div></div>
+      <div class="row" id="kills-row"><span>Лимит убийств</span><div id="kills-sel" class="opts"><div class="opt" data-k="30">30</div><div class="opt" data-k="60">60</div><div class="opt" data-k="100">100</div></div></div>
+      <div class="row" id="loadout-row"><span>Снаряжение</span><div class="opts"><select id="loadout-primary"></select><select id="loadout-secondary"></select></div></div>
+    </div>
+    <button id="btn-start" class="mbtn big go hover-snd">НАЧАТЬ МАТЧ</button>
+  </div>
+
+  <div id="panel-settings" class="panel wide">
+    <div class="panel-title">Настройки <button class="back hover-snd" data-panel="panel-main">← Назад</button></div>
+    <form id="settings-form" onsubmit="return false">
+      <div class="sgrid">
+        <label>Имя игрока <input name="playerName" type="text" maxlength="16"></label>
+        <label>Чувствительность мыши <input name="sensitivity" type="range" min="0.2" max="4" step="0.05"><span class="rv"></span></label>
+        <label>Поле зрения (FOV) <input name="fov" type="range" min="60" max="110" step="1"><span class="rv"></span></label>
+        <label>Громкость эффектов <input name="volume" type="range" min="0" max="1" step="0.05"><span class="rv"></span></label>
+        <label>Громкость музыки/фона <input name="music" type="range" min="0" max="1" step="0.05"><span class="rv"></span></label>
+        <label>Масштаб HUD <input name="hudScale" type="range" min="0.7" max="1.4" step="0.05"><span class="rv"></span></label>
+        <label>Масштаб рендера <input name="resScale" type="range" min="0.5" max="1.5" step="0.05"><span class="rv"></span></label>
+        <label>Качество <select name="quality"><option value="low">Низкое</option><option value="medium">Среднее</option><option value="high">Высокое</option></select></label>
+        <label class="chk"><input name="shadows" type="checkbox"> Тени</label>
+        <label class="chk"><input name="invertY" type="checkbox"> Инвертировать мышь по Y</label>
+        <label class="chk"><input name="crouchToggle" type="checkbox"> Присед — переключатель</label>
+        <label class="chk"><input name="showFps" type="checkbox"> Показывать FPS</label>
+      </div>
+      <div class="section-lbl">Прицел</div>
+      <div class="sgrid">
+        <label>Цвет <input name="crosshairColor" type="color"></label>
+        <label>Длина <input name="crosshairSize" type="range" min="2" max="20" step="1"><span class="rv"></span></label>
+        <label>Разрыв <input name="crosshairGap" type="range" min="0" max="15" step="1"><span class="rv"></span></label>
+        <label>Толщина <input name="crosshairThick" type="range" min="1" max="5" step="1"><span class="rv"></span></label>
+        <label class="chk"><input name="crosshairDot" type="checkbox"> Точка в центре</label>
+        <div class="ch-prev"><canvas id="ch-preview" width="120" height="80"></canvas></div>
+      </div>
+    </form>
+  </div>
+
+  <div id="panel-stats" class="panel">
+    <div class="panel-title">Статистика <button class="back hover-snd" data-panel="panel-main">← Назад</button></div>
+    <div id="stats-body"></div>
+    <button id="btn-reset-stats" class="mbtn small hover-snd">Сбросить</button>
+  </div>
+
+  <div id="panel-controls" class="panel wide">
+    <div class="panel-title">Управление <button class="back hover-snd" data-panel="panel-main">← Назад</button></div>
+    <div class="controls-grid">
+      <div><kbd>W A S D</kbd> Движение</div><div><kbd>Мышь</kbd> Обзор</div><div><kbd>ЛКМ</kbd> Огонь / установка бомбы (слот 5)</div><div><kbd>ПКМ</kbd> Прицел (снайперки, AUG) / удар ножом / слабый бросок</div>
+      <div><kbd>Space</kbd> Прыжок</div><div><kbd>Ctrl / C</kbd> Присед</div><div><kbd>Shift</kbd> Тихий шаг</div><div><kbd>R</kbd> Перезарядка</div>
+      <div><kbd>1 2 3 4 5</kbd> Оружие: основное / пистолет / нож / гранаты / бомба</div><div><kbd>Q</kbd> Предыдущее оружие</div><div><kbd>Колёсико</kbd> Смена оружия</div><div><kbd>E</kbd> Обезвредить бомбу / подобрать оружие</div>
+      <div><kbd>B</kbd> Магазин (во время закупки)</div><div><kbd>G</kbd> Выбросить оружие</div><div><kbd>F</kbd> Осмотреть оружие</div><div><kbd>Tab</kbd> Таблица результатов</div>
+      <div><kbd>Z</kbd> Радио-команды</div><div><kbd>Esc</kbd> Пауза / меню</div><div><kbd>F11</kbd> Полный экран</div><div><kbd>ЛКМ (когда мёртв)</kbd> Сменить наблюдение</div>
+    </div>
+  </div>
+
+  <div id="panel-about" class="panel">
+    <div class="panel-title">Об игре <button class="back hover-snd" data-panel="panel-main">← Назад</button></div>
+    <div class="about">
+      <p><b>Standoff 3 — PC Edition</b>. Шутер от первого лица в духе Standoff 2 / Counter-Strike: раунды, экономика, установка и обезвреживание бомбы, 30+ видов оружия, гранаты, умные боты с четырьмя уровнями сложности.</p>
+      <p>Режимы: Разминирование, Командный бой, Каждый за себя, Гонка вооружений. Карты: Sandstone, Rust, Province, Arena.</p>
+      <p>Все текстуры, модели и звуки генерируются процедурно прямо в игре — никаких сторонних файлов. Работает в браузере Chrome/Edge без установки.</p>
+      <p class="dim">Советы: играйте в полноэкранном режиме (F11). Если курсор «выпадает», кликните по экрану. Настройки и статистика сохраняются в браузере.</p>
+    </div>
+  </div>
+</div>
+
+<div id="pause" style="display:none">
+  <div class="pause-box">
+    <div class="pause-title">Пауза</div>
+    <button id="btn-resume" class="mbtn big hover-snd">Продолжить</button>
+    <button id="btn-pause-settings" class="mbtn hover-snd">Настройки</button>
+    <button id="btn-quit" class="mbtn hover-snd">Выйти в меню</button>
+    <div id="panel-settings-pause" style="display:none"></div>
+  </div>
+</div>
+
+<div id="matchover" style="display:none">
+  <div class="mo-box">
+    <div id="mo-title" class="mo-title">Победа!</div>
+    <div id="mo-text" class="mo-text"></div>
+    <div id="mo-me" class="mo-me"></div>
+    <div id="mo-board" class="mo-board"></div>
+    <div class="mo-btns"><button id="btn-mo-again" class="mbtn hover-snd">Ещё раз</button><button id="btn-mo-menu" class="mbtn hover-snd">В меню</button></div>
+  </div>
+</div>
+
+<script src="lib/three.min.js"></script>
+<script src="src/core/utils.js"></script>
+<script src="src/core/textures.js"></script>
+<script src="src/core/audio.js"></script>
+<script src="src/core/input.js"></script>
+<script src="src/game/config.js"></script>
+<script src="src/game/world.js"></script>
+<script src="src/game/nav.js"></script>
+<script src="src/game/mapbuilder.js"></script>
+<script src="src/game/characters.js"></script>
+<script src="src/game/weapons.js"></script>
+<script src="src/game/actor.js"></script>
+<script src="src/game/player.js"></script>
+<script src="src/game/bots.js"></script>
+<script src="src/game/effects.js"></script>
+<script src="src/game/hud.js"></script>
+<script src="src/game/modes.js"></script>
+<script src="src/game/game.js"></script>
+<script src="src/maps/sandstone.js"></script>
+<script src="src/maps/rust.js"></script>
+<script src="src/maps/province.js"></script>
+<script src="src/maps/arena.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
