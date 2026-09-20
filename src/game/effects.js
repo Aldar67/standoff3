@@ -183,6 +183,7 @@
       else if (g.id === 'smoke') { this.smokeCloud(p.x, p.y, p.z, g.def.radius, g.def.duration); }
       else if (g.id === 'molotov') { const fy = game.world.floorAt(p.x, p.z, p.y + 0.3); this.fireArea(p.x, fy, p.z, g.def.radius, g.def.duration, g.owner); S3.Audio.explosion(p, false); this.explosion(p.x, fy, p.z, false); }
       game.emitNoiseAt(p, 60, g.owner);
+      if (game.net && game.net.role === 'host') game.net.sendNadeEnd(g);
     }
     updateFires(dt) {
       for (let i = this.fires.length - 1; i >= 0; i--) {

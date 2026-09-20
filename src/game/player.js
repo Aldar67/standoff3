@@ -50,26 +50,36 @@
       if (w && w.reloading) { this.scoped = false; this.zoomLevel = 0; }
       // knife alt
       if (w && w.def.type === 'knife' && canAct) { if (I.btnPressed[2]) { this.altPressed = true; this.firePressed = true; } if (I.buttons[2]) this.altHeld = true; }
+      const isNetClient = game.net && game.net.role === 'client';
       // grenades
       if (w && w.def.type === 'grenade' && canAct && w.drawT <= 0) {
         if (!this.pinPulled && (I.buttons[0] || I.buttons[2]) && this.throwCooldown <= 0) { this.pinPulled = true; this.pinAlt = I.buttons[2] && !I.buttons[0]; game.vm.play('pin', 0.3); S3.Audio.pinPull(); }
         else if (this.pinPulled && !I.buttons[0] && !I.buttons[2]) {
-          this.pinPulled = false; const strength = this.pinAlt ? 0.45 : 1.0; game.vm.play('throw', 0.5); this.throwCooldown = 0.8;
-          setTimeout(() => { if (this.alive) game.throwGrenade(this, w, strength); }, 120);
+          this.pinPulled = false; const strength = this.pinAlt ? 0.45 : 1.0; game.vm.play('throw', 0.5); this.throwCooldown = 0.8; const wid = w.id;
+          setTimeout(() => {
+            if (!this.alive) return;
+            if (isNetClient) {
+              S3.Audio.throwSound(); game.net.sendThrow(wid, strength); this.consumeGrenade(w);
+              const again = this.hasGrenade(wid); if (again) { if (this.current !== again) this.select(again, true); else again.draw(); } else this.select(this.bestWeapon(), true);
+            } else game.throwGrenade(this, w, strength);
+          }, 120);
         }
         this.fireHeld = false; this.firePressed = false;
       } else this.pinPulled = false;
       this.throwCooldown -= dt;
-      // bomb planting
+      // bomb planting: gameplay is host-authoritative (see HostSync.applyInput); a client only
+      // needs the local viewmodel pose here, the progress bar arrives via a targeted network event.
       if (w && w.def.type === 'bomb' && canAct) {
-        const wantPlant = I.buttons[0]; const res = game.mode.tryPlant ? game.mode.tryPlant(this, dt, wantPlant) : null;
+        const wantPlant = I.buttons[0];
+        const res = isNetClient ? (wantPlant ? 'planting' : null) : (game.mode.tryPlant ? game.mode.tryPlant(this, dt, wantPlant) : null);
         if (res === 'planting') { if (game.vm.anim !== 'plant') game.vm.play('plant', 99); } else if (game.vm.anim === 'plant') game.vm.anim = null;
         this.fireHeld = false; this.firePressed = false;
       } else if (game.vm.anim === 'plant') game.vm.anim = null;
-      // defuse
-      if (game.mode.tryDefuse) game.mode.tryDefuse(this, dt, canAct && I.down('use') && !this.pinPulled);
+      // defuse: same story — host runs the real tryDefuse for our remote avatar and pushes us
+      // hint/progress events; nothing to simulate locally on a client.
+      if (!isNetClient && game.mode.tryDefuse) game.mode.tryDefuse(this, dt, canAct && I.down('use') && !this.pinPulled);
       // pickup
-      if (I.justPressed('use')) game.tryPickup(this);
+      if (I.justPressed('use') && !isNetClient) game.tryPickup(this);
     }
     updateCamera(camera, dt) {
       const S = S3.Settings.data; const w = this.current;

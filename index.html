@@ -16,6 +16,7 @@
   <div class="logo"><span class="logo-a">STANDOFF</span><span class="logo-b">3</span><div class="logo-sub">PC EDITION · BOTS</div></div>
   <div id="panel-main" class="panel">
     <button class="mbtn big hover-snd" data-panel="panel-play">▶ Играть</button>
+    <button class="mbtn hover-snd" data-panel="panel-network">🌐 Игра по сети</button>
     <button class="mbtn hover-snd" data-panel="panel-settings">Настройки</button>
     <button class="mbtn hover-snd" data-panel="panel-stats">Статистика</button>
     <button class="mbtn hover-snd" data-panel="panel-controls">Управление</button>
@@ -36,6 +37,46 @@
       <div class="row" id="loadout-row"><span>Снаряжение</span><div class="opts"><select id="loadout-primary"></select><select id="loadout-secondary"></select></div></div>
     </div>
     <button id="btn-start" class="mbtn big go hover-snd">НАЧАТЬ МАТЧ</button>
+  </div>
+
+  <div id="panel-network" class="panel wide">
+    <div class="panel-title">Игра по сети <button class="back hover-snd" data-panel="panel-main">← Назад</button></div>
+    <div class="net-tabs">
+      <div class="net-tab act hover-snd" data-nettab="host">Создать игру (хост)</div>
+      <div class="net-tab hover-snd" data-nettab="join">Присоединиться</div>
+    </div>
+
+    <div id="net-host-pane" class="net-pane">
+      <div class="net-info">1. Запустите файл <b>Standoff3-Host.bat</b> в папке игры — откроется окно сервера, в нём будет показан ваш адрес в локальной сети.<br>2. Впишите ник и адрес сервера ниже (по умолчанию — этот же компьютер) и нажмите «Подключиться как хост».<br>3. Остальные игроки открывают игру и подключаются по вашему IP через вкладку «Присоединиться».</div>
+      <div class="rows">
+        <div class="row"><span>Ваш ник</span><input id="net-host-name" type="text" maxlength="16"></div>
+        <div class="row"><span>Адрес сервера</span><input id="net-host-addr" type="text" value="ws://localhost:8766"></div>
+      </div>
+      <button id="btn-net-host-connect" class="mbtn hover-snd">Подключиться как хост</button>
+      <div id="net-host-status" class="net-status"></div>
+      <div id="net-lobby" style="display:none">
+        <div class="section-lbl">Режим</div><div id="net-mode-list" class="cards"></div>
+        <div class="section-lbl">Карта</div><div id="net-map-list" class="cards maps"></div>
+        <div class="rows">
+          <div class="row"><span>Ваша команда</span><div id="net-team-sel" class="opts"><div class="opt" data-team="CT">Спецназ (CT)</div><div class="opt" data-team="T">Террористы (T)</div></div></div>
+          <div class="row"><span>Боты (на команду)</span><div class="opts"><input id="net-bots-range" type="range" min="0" max="8" value="3"><span id="net-bots-val" class="rv">3</span></div></div>
+          <div class="row"><span>Сложность ботов</span><div id="net-diff-sel" class="opts"><div class="opt" data-diff="easy">Лёгкий</div><div class="opt" data-diff="medium">Средний</div><div class="opt" data-diff="hard">Сложный</div><div class="opt" data-diff="expert">Эксперт</div></div></div>
+        </div>
+        <div class="section-lbl">Игроки в лобби</div>
+        <div id="net-players" class="net-players"></div>
+        <button id="btn-net-start" class="mbtn big go hover-snd">НАЧАТЬ ИГРУ ДЛЯ ВСЕХ</button>
+      </div>
+    </div>
+
+    <div id="net-join-pane" class="net-pane" style="display:none">
+      <div class="net-info">Узнайте у хоста его адрес в локальной сети (он показан в окне сервера, например <code>192.168.1.50:8766</code>) и впишите его ниже.</div>
+      <div class="rows">
+        <div class="row"><span>Ваш ник</span><input id="net-join-name" type="text" maxlength="16"></div>
+        <div class="row"><span>Адрес хоста</span><input id="net-join-addr" type="text" placeholder="ws://192.168.1.50:8766"></div>
+      </div>
+      <button id="btn-net-join-connect" class="mbtn hover-snd">Подключиться</button>
+      <div id="net-join-status" class="net-status"></div>
+    </div>
   </div>
 
   <div id="panel-settings" class="panel wide">
@@ -132,6 +173,9 @@
 <script src="src/game/effects.js"></script>
 <script src="src/game/hud.js"></script>
 <script src="src/game/modes.js"></script>
+<script src="src/net/net.js"></script>
+<script src="src/net/hostsync.js"></script>
+<script src="src/net/clientsync.js"></script>
 <script src="src/game/game.js"></script>
 <script src="src/maps/sandstone.js"></script>
 <script src="src/maps/rust.js"></script>

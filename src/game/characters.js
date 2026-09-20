@@ -74,7 +74,7 @@
       const m = S3.buildWeaponModel(w, 0.85); m.rotation.set(0, 0, 0); m.position.set(0.02, 0, 0.1); this.weaponMesh = m; this.weaponHolder.add(m);
     }
     // pose: moving speed (0..1), crouch (0..1), aim pitch (rad), dt
-    update(dt, speed, crouch, pitch, firing) {
+    update(dt, speed, crouch, pitch, firing, twist) {
       if (this.dead) { this.updateDeath(dt); return; }
       this.animT += dt * (6 + speed * 6);
       this.crouch = S3.damp(this.crouch, crouch, 12, dt);
@@ -85,6 +85,9 @@
       this.legL.shin.rotation.x = Math.max(0, -sw) * 0.9 + c * 1.6; this.legR.shin.rotation.x = Math.max(0, sw) * 0.9 + c * 1.9;
       this.hips.position.y = 0.95 - c * 0.45 + Math.abs(Math.cos(this.animT)) * speed * 0.03;
       this.torso.rotation.x = c * 0.25 + (firing ? 0.02 : 0);
+      // torso/weapon twist toward true aim direction while hips/legs keep facing the movement direction
+      // (fixes bots visually "moonwalking" when chasing/strafing while aiming at a target)
+      this.torso.rotation.y = twist || 0;
       // arms hold weapon: both arms forward, pitch with aim
       const holding = !!this.weaponMesh && this.weaponId !== 'knife';
       const armPitch = -Math.PI / 2 + (pitch || 0) * 0.9;
@@ -117,6 +120,41 @@
     }
   }
   S3.CharacterModel = CharacterModel;
+
+  // Shared visual-facing logic for any character-controlled actor (bot AI or a networked
+  // human puppet): the hips/legs turn to face the actual movement direction while the torso
+  // twists toward the true aim direction, so the model never appears to glide/"moonwalk"
+  // when moving in a direction that differs from where it is aiming.
+  // Gives any actor (a remote human on the host, or a puppet on a client) a visible
+  // third-person body wired up the same way Bot already does it, so shared code (animation,
+  // death ragdoll, weapon swaps) all just works without duplicating that logic.
+  S3.attachCharacterModel = function (actor, scene, skinIdx) {
+    const model = new S3.CharacterModel(actor.team, skinIdx || 0);
+    scene.add(model.root); model.root.visible = false;
+    actor.model = model;
+    actor.onWeaponChange = (w) => model.setWeapon(w.id);
+    if (actor.current) model.setWeapon(actor.current.id);
+    return model;
+  };
+
+  S3.animateCharacterVisual = function (actor, dt) {
+    const m = actor.model; if (!m) return;
+    if (actor.bodyYaw === undefined) actor.bodyYaw = actor.yaw;
+    if (actor.alive) {
+      const wd = actor.wishDir;
+      const moving = wd && (wd.x * wd.x + wd.z * wd.z) > 0.04;
+      if (moving) {
+        const targetYaw = Math.atan2(-wd.x, -wd.z);
+        let diff = S3.angleWrap(targetYaw - actor.bodyYaw);
+        const maxTurn = 14 * dt; diff = S3.clamp(diff, -maxTurn, maxTurn);
+        actor.bodyYaw = S3.angleWrap(actor.bodyYaw + diff);
+      } else actor.bodyYaw = actor.yaw;
+    }
+    m.root.position.copy(actor.pos); m.root.rotation.y = actor.bodyYaw;
+    const maxTwist = 150 * S3.DEG;
+    const twist = actor.alive ? S3.clamp(S3.angleWrap(actor.yaw - actor.bodyYaw), -maxTwist, maxTwist) : 0;
+    m.update(dt, actor.alive ? Math.min(1, actor.speedFrac * 1.2) : 0, actor.crouchAmt, actor.pitch, actor.firing > 0, twist);
+  };
 
   // Hitboxes in local (yaw-aligned) space: relative to feet position. Returns zone or null.
   // Zones: head (sphere), body (box), legs (box)

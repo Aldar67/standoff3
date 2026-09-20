@@ -44,20 +44,49 @@
       this.effects = new S3.Effects(this); this.vm = new S3.Viewmodel(this.camera); this.vm.setLighting(sd, new THREE.Color(theme.sunColor), new THREE.Color(theme.hemiSky), new THREE.Color(theme.hemiGround));
       S3.Input.init(canvas);
       // actors
-      const o = this.opts; const pTeam = o.playerTeam === 'random' ? S3.pick(['T', 'CT']) : (o.playerTeam || 'CT');
-      this.player = new S3.Player(this, { name: S.playerName || 'Игрок', team: pTeam }); this.actors.push(this.player);
-      const names = S3.shuffle(S3.BOT_NAMES.slice());
-      const perTeam = o.botsPerTeam || 5; let ni = 0;
-      for (const team of ['CT', 'T']) { const n = team === pTeam ? perTeam - 1 : perTeam; for (let i = 0; i < n; i++) { const bot = new S3.Bot(this, { name: names[ni++ % names.length], team, difficulty: o.difficulty || 'medium', skinIdx: i }); this.actors.push(bot); this.bots.push(bot); } }
-      if (o.mode === 'ffa') { this.actors.forEach((a, i) => { a.team = i % 2 ? 'T' : 'CT'; }); }
+      const o = this.opts; const net = o.net || null; this.net = null;
+      if (net && net.role === 'host') {
+        const pTeam = o.playerTeam === 'random' ? S3.pick(['T', 'CT']) : (o.playerTeam || 'CT');
+        this.player = new S3.Player(this, { name: S.playerName || 'Игрок', team: pTeam }); this.actors.push(this.player);
+        this.net = new S3.HostSync(this, net.net); this.net.setLocalKey();
+        for (const r of net.roster || []) this.net.addRemote(r.id, r.name, r.team, r.skinIdx);
+        const names = S3.shuffle(S3.BOT_NAMES.slice());
+        const perTeam = o.botsPerTeam || 5; let ni = 0;
+        for (const team of ['CT', 'T']) {
+          const humans = this.actors.filter((a) => a.team === team && (a === this.player || a.remoteInput)).length;
+          const n = Math.max(0, perTeam - humans);
+          for (let i = 0; i < n; i++) { const bot = new S3.Bot(this, { name: names[ni++ % names.length], team, difficulty: o.difficulty || 'medium', skinIdx: i }); this.actors.push(bot); this.bots.push(bot); }
+        }
+        this.net.tagBots();
+      } else if (net && net.role === 'client') {
+        const pTeam = net.myTeam || 'CT';
+        this.player = new S3.Player(this, { name: S.playerName || 'Игрок', team: pTeam }); this.actors.push(this.player);
+        this.clientSync = new S3.ClientSync(this, net.net); this.net = this.clientSync;
+      } else {
+        const pTeam = o.playerTeam === 'random' ? S3.pick(['T', 'CT']) : (o.playerTeam || 'CT');
+        this.player = new S3.Player(this, { name: S.playerName || 'Игрок', team: pTeam }); this.actors.push(this.player);
+        const names = S3.shuffle(S3.BOT_NAMES.slice());
+        const perTeam = o.botsPerTeam || 5; let ni = 0;
+        for (const team of ['CT', 'T']) { const n = team === pTeam ? perTeam - 1 : perTeam; for (let i = 0; i < n; i++) { const bot = new S3.Bot(this, { name: names[ni++ % names.length], team, difficulty: o.difficulty || 'medium', skinIdx: i }); this.actors.push(bot); this.bots.push(bot); } }
+        if (o.mode === 'ffa') { this.actors.forEach((a, i) => { a.team = i % 2 ? 'T' : 'CT'; }); }
+      }
       this.hud = new S3.HUD(this);
-      this.mode = S3.createMode(this, o.mode || 'defuse', { rounds: o.rounds, killLimit: o.killLimit, timeLimit: o.timeLimit });
+      if (net && net.role === 'client') { this.mode = new S3.RemoteMode(o.mode); }
+      else { this.mode = S3.createMode(this, o.mode || 'defuse', { rounds: o.rounds, killLimit: o.killLimit, timeLimit: o.timeLimit }); }
       this.vm.setWeapon('knife', this.player.team);
       window.addEventListener('resize', () => this.onResize()); this.onResize();
       S3.Audio.startAmbient(theme.ambient);
-      this.mode.start();
-      this.hud.addChat(`<span class="sys">Добро пожаловать в Standoff 3! Карта: ${def.title}. Tab — таблица, B — магазин, Esc — меню.</span>`);
+      if (net && net.role === 'host') { this.wrapHudForBroadcast(); this.mode.start(); }
+      else if (!net) { this.mode.start(); }
+      this.hud.addChat(net && net.role === 'client' ? `<span class="sys">Подключено к игре хоста. Карта: ${def.title}.</span>` : `<span class="sys">Добро пожаловать в Standoff 3! Карта: ${def.title}. Tab — таблица, B — магазин, Esc — меню.</span>`);
+      if (net) net.net.onCloseCb = () => { if (this.onNetLost) this.onNetLost(); };
       this.running = true; this.lastFrame = performance.now(); requestAnimationFrame((t) => this.loop(t));
+    }
+    // once HostSync/hud/mode exist: banners are broadcast automatically for every future call site
+    // (round start/end, match-over, side-swap...) without having to hunt down each one individually.
+    wrapHudForBroadcast() {
+      const net = this.net, hud = this.hud; const origBanner = hud.showBanner.bind(hud);
+      hud.showBanner = (text, sub, dur, color) => { origBanner(text, sub, dur, color); net.broadcastBanner(text, sub, dur, color); };
     }
     buildSky(theme, sd) {
       const geo = new THREE.SphereGeometry(450, 32, 16);
@@ -89,7 +118,7 @@
       }
       return best || list[0];
     }
-    spawnActor(a, any) { const s = this.pickSpawn(a.team, a, any); const y = this.world.floorAt(s.x, s.z, 30); a.spawnAt(s.x, y, s.z, s.yaw); if (a.isBot) a.updateModel(0); if (a.isPlayer) { this.vm.buildArms(a.team); this.vm.setWeapon(a.current.id, a.team); } }
+    spawnActor(a, any) { const s = this.pickSpawn(a.team, a, any); const y = this.world.floorAt(s.x, s.z, 30); a.spawnAt(s.x, y, s.z, s.yaw); a.updateModel(0); if (a.isLocal) { this.vm.buildArms(a.team); this.vm.setWeapon(a.current.id, a.team); } }
     visibleToTeam(a, team) { return !!this.radarVis[a.id]; }
     updateRadarVis() {
       const p = this.player; const vis = {}; const eye = p.eyePos(this.tmp); const fwd = p.forward(this.tmp2);
@@ -103,7 +132,13 @@
       }
       this.radarVis = vis;
     }
+    // per-actor HUD feedback: only touches the local screen it belongs to; for a networked
+    // remote human on the host, forwards to that player's own client instead.
+    localProgress(actor, label, frac) { if (actor.isLocal) this.hud.setProgress(label, frac); else if (actor.isPlayer && this.net) this.net.sendProgress(actor, label, frac); }
+    localHint(actor, text) { if (actor.isLocal) this.hud.setHint(text); else if (actor.isPlayer && this.net) this.net.sendHint(actor, text); }
+    localChat(actor, html) { if (actor.isLocal) this.hud.addChat(html); else if (actor.isPlayer && this.net) this.net.sendPrivateChat(actor, html); }
     radio(actor, text) {
+      if (this.net && this.net.role === 'host') this.net.broadcastRadio(actor, text);
       if (this.mode.id === 'ffa') return; if (actor.team !== this.player.team) return;
       this.hud.addChat(`<span class="radio">📻</span> <span style="color:${S3.TEAM_COLOR_CSS[actor.team]}">${actor.name}</span>: ${text}`); S3.Audio.radio();
     }
@@ -120,14 +155,19 @@
       }
       return res;
     }
+    // Full authoritative shot resolution: raycast, damage, penetration, all local + network feedback.
+    // Runs on solo/host for EVERY actor (bots, the host's own player, and remote humans alike).
+    // A client never calls this for its own weapon — see actorShootCosmetic() below.
     actorShoot(actor, dirs, recSide, recUp) {
       const w = actor.current, d = w.def; const eye = actor.eyePos(new V3()); const aim = actor.aimDir(new V3());
       const baseYaw = Math.atan2(-aim.x, -aim.z), basePitch = Math.asin(S3.clamp(aim.y, -1, 1));
       // muzzle
       let muzzle;
-      if (actor.isPlayer) { muzzle = this.vm.muzzleWorld.clone(); this.camera.localToWorld(muzzle); } else { const r = actor.right(this.tmp2); muzzle = eye.clone().addScaledVector(aim, 0.55).addScaledVector(r, 0.18); muzzle.y -= 0.12; }
+      if (actor.isLocal) { muzzle = this.vm.muzzleWorld.clone(); this.camera.localToWorld(muzzle); } else { const r = actor.right(this.tmp2); muzzle = eye.clone().addScaledVector(aim, 0.55).addScaledVector(r, 0.18); muzzle.y -= 0.12; }
       const isSil = d.sound === 'silenced';
-      for (const off of dirs) {
+      let netFeedback = null; // captured from the first pellet, for network replay on remote clients
+      for (let pi = 0; pi < dirs.length; pi++) {
+        const off = dirs[pi];
         const yaw = baseYaw - off[0] * S3.DEG, pitch = basePitch + off[1] * S3.DEG; const cp = Math.cos(pitch);
         const dir = new V3(-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp);
         let ox = eye.x, oy = eye.y, oz = eye.z; let dmgMul = 1; let penetrations = 0; let travelled = 0;
@@ -135,20 +175,22 @@
           const hit = this.traceBullet(actor, ox, oy, oz, dir.x, dir.y, dir.z, 300 - travelled);
           const endP = hit ? new V3(hit.x, hit.y, hit.z) : new V3(ox, oy, oz).addScaledVector(dir, 120);
           if (pass === 0) this.effects.tracer(muzzle, endP);
-          if (!hit) break;
+          if (!hit) { if (pi === 0 && pass === 0) netFeedback = { end: endP, kind: null }; break; }
           const dist = travelled + hit.t;
           if (hit.type === 'actor') {
             const victim = hit.actor; let dmg = d.damage * Math.pow(d.rangeMod || 0.95, dist / 9.5) * dmgMul;
             const dealt = victim.takeDamage(dmg, actor, hit.zone, d.id, dir.x, dir.z);
             this.effects.blood(hit.x, hit.y, hit.z, dir.x, dir.y, dir.z); S3.Audio.fleshHit(endP);
-            if (actor.isPlayer && dealt > 0) { this.hud.hitmarkerShow(hit.zone === 'head', !victim.alive); S3.Audio.hitmarker(hit.zone === 'head'); S3.Stats.data.shotsHit++; }
-            if (victim.isPlayer && dealt > 0 && victim.alive && Math.random() < 0.3) { /* whiz not needed */ }
+            if (actor.isLocal && dealt > 0) { this.hud.hitmarkerShow(hit.zone === 'head', !victim.alive); S3.Audio.hitmarker(hit.zone === 'head'); S3.Stats.data.shotsHit++; }
+            else if (!actor.isLocal && actor.isPlayer && dealt > 0 && this.net) this.net.sendHitmarker(actor, hit.zone === 'head', !victim.alive);
+            if (pi === 0 && pass === 0) netFeedback = { end: endP, kind: 'actor', victim, zone: hit.zone };
             break;
           } else {
             this.effects.impact(hit.x, hit.y, hit.z, hit.nx, hit.ny, hit.nz, hit.surface);
             if (endP.distanceTo(this.player.pos) < 45) { S3.Audio.impact(endP, hit.surface); if (Math.random() < 0.15 && hit.surface === 'metal') S3.Audio.ricochet(endP); }
             // near-miss whiz for the player
-            if (!actor.isPlayer && this.player.alive && this.isEnemy(actor, this.player)) { const pe = this.player.eyePos(this.tmp3); const t = (pe.x - ox) * dir.x + (pe.y - oy) * dir.y + (pe.z - oz) * dir.z; if (t > 0 && t < hit.t) { const cx = ox + dir.x * t - pe.x, cy = oy + dir.y * t - pe.y, cz = oz + dir.z * t - pe.z; if (cx * cx + cy * cy + cz * cz < 2.2) S3.Audio.whiz(); } }
+            if (actor !== this.player && this.player.alive && this.isEnemy(actor, this.player)) { const pe = this.player.eyePos(this.tmp3); const t = (pe.x - ox) * dir.x + (pe.y - oy) * dir.y + (pe.z - oz) * dir.z; if (t > 0 && t < hit.t) { const cx = ox + dir.x * t - pe.x, cy = oy + dir.y * t - pe.y, cz = oz + dir.z * t - pe.z; if (cx * cx + cy * cy + cz * cz < 2.2) S3.Audio.whiz(); } }
+            if (pi === 0 && pass === 0) netFeedback = { end: endP, kind: 'world', nx: hit.nx, ny: hit.ny, nz: hit.nz, surface: hit.surface };
             // penetration
             const penPower = d.type === 'sniper' ? 0.8 : d.type === 'rifle' || d.type === 'mg' ? 0.5 : d.type === 'pistol' && d.id === 'deagle' ? 0.35 : d.type === 'shotgun' ? 0 : 0.2;
             if (penPower <= 0 || penetrations > 0) break;
@@ -161,11 +203,28 @@
       // recoil punch after the shot
       actor.punchPitch += recUp; actor.punchYaw += recSide;
       // sounds / fx
-      S3.Audio.gunshot(d.sound, actor.isPlayer ? null : actor.pos, 1);
+      S3.Audio.gunshot(d.sound, actor.isLocal ? null : actor.pos, 1);
       this.effects.muzzleFlash(muzzle, aim, d.type === 'sniper' || d.type === 'shotgun' || d.type === 'mg');
-      if (!isSil && d.type !== 'knife' && (actor.isPlayer || actor.pos.distanceTo(this.player.pos) < 25)) { const r = actor.right(new V3()); this.effects.shell(muzzle.clone().addScaledVector(aim, -0.15), r, this.tmpUp); }
+      if (!isSil && d.type !== 'knife' && (actor.isLocal || actor.pos.distanceTo(this.player.pos) < 25)) { const r = actor.right(new V3()); this.effects.shell(muzzle.clone().addScaledVector(aim, -0.15), r, this.tmpUp); }
       this.emitNoise(actor, isSil ? 18 : 70);
-      if (actor.isPlayer) { this.vm.onShot(d.type === 'sniper' || d.type === 'shotgun' ? 1.6 : d.type === 'pistol' ? 0.8 : 1); S3.Stats.data.shotsFired++; }
+      if (actor.isLocal) { this.vm.onShot(d.type === 'sniper' || d.type === 'shotgun' ? 1.6 : d.type === 'pistol' ? 0.8 : 1); S3.Stats.data.shotsFired++; }
+      if (!actor.isLocal && actor.isPlayer && this.net && netFeedback) {
+        const nf = netFeedback;
+        this.net.sendShotFeedback(actor, d.id, muzzle, nf.end, nf.kind === 'world' ? { x: nf.nx, y: nf.ny, z: nf.nz } : null, nf.kind, nf.victim || null, nf.zone || null, nf.surface || null);
+      }
+    }
+    // Cosmetic-only local echo of firing, used by a CLIENT for its OWN weapon: instant muzzle
+    // flash / sound / recoil / shell so the trigger feels responsive, but NO raycast or damage —
+    // the authoritative outcome (tracer, impact, blood, hitmarker) arrives moments later from the
+    // host's broadcast 'shot' event and is rendered by ClientSync.
+    actorShootCosmetic(actor, dirs, recSide, recUp) {
+      const w = actor.current, d = w.def; const aim = actor.aimDir(new V3());
+      const muzzle = this.vm.muzzleWorld.clone(); this.camera.localToWorld(muzzle);
+      actor.punchPitch += recUp; actor.punchYaw += recSide;
+      S3.Audio.gunshot(d.sound, null, 1);
+      this.effects.muzzleFlash(muzzle, aim, d.type === 'sniper' || d.type === 'shotgun' || d.type === 'mg');
+      if (d.sound !== 'silenced' && d.type !== 'knife') { const r = actor.right(new V3()); this.effects.shell(muzzle.clone().addScaledVector(aim, -0.15), r, this.tmpUp); }
+      this.vm.onShot(d.type === 'sniper' || d.type === 'shotgun' ? 1.6 : d.type === 'pistol' ? 0.8 : 1); S3.Stats.data.shotsFired++;
     }
     exitT(x, y, z, dir, box) {
       let t = Infinity; const e = 1e-4;
@@ -176,7 +235,7 @@
     }
     actorKnife(actor, alt) {
       const eye = actor.eyePos(new V3()); const dir = actor.aimDir(new V3()); const range = 2.1; const d = S3.WEAPONS.knife;
-      if (actor.isPlayer) this.vm.play(alt ? 'knife2' : 'knife1', alt ? 0.5 : 0.3);
+      if (actor.isLocal) this.vm.play(alt ? 'knife2' : 'knife1', alt ? 0.5 : 0.3);
       setTimeout(() => {
         if (!actor.alive) return;
         // wide hit test: try center ray and slight offsets
@@ -187,11 +246,24 @@
         if (hit && hit.type === 'actor') {
           const v = hit.actor; const vf = v.flatForward(this.tmp2); const toV = this.tmp3.set(v.pos.x - actor.pos.x, 0, v.pos.z - actor.pos.z).normalize(); const back = vf.dot(toV) > 0.45;
           let dmg = back ? d.backstab : (alt ? d.damageAlt : d.damage); if (hit.zone === 'head') dmg *= 1.2;
-          v.takeDamage(dmg, actor, back ? 'body' : hit.zone, 'knife', dir.x, dir.z, { ignoreArmor: back }); this.effects.blood(hit.x, hit.y, hit.z, dir.x, dir.y, dir.z); S3.Audio.knifeHit(actor.isPlayer ? null : actor.pos);
-          if (actor.isPlayer) { this.hud.hitmarkerShow(false, !v.alive); S3.Audio.hitmarker(false); }
-        } else if (hit) { this.effects.impact(hit.x, hit.y, hit.z, hit.nx, hit.ny, hit.nz, hit.surface); S3.Audio.knifeWall(actor.isPlayer ? null : actor.pos); }
-        else S3.Audio.knifeSwing(actor.isPlayer ? null : actor.pos);
+          v.takeDamage(dmg, actor, back ? 'body' : hit.zone, 'knife', dir.x, dir.z, { ignoreArmor: back }); this.effects.blood(hit.x, hit.y, hit.z, dir.x, dir.y, dir.z); S3.Audio.knifeHit(actor.isLocal ? null : actor.pos);
+          if (actor.isLocal) { this.hud.hitmarkerShow(false, !v.alive); S3.Audio.hitmarker(false); } else if (actor.isPlayer && this.net) this.net.sendHitmarker(actor, false, !v.alive);
+          if (!actor.isLocal && actor.isPlayer && this.net) this.net.sendMeleeFeedback(actor, alt, 'actor', new V3(hit.x, hit.y, hit.z), null, v, back ? 'body' : hit.zone, back);
+        } else if (hit) {
+          this.effects.impact(hit.x, hit.y, hit.z, hit.nx, hit.ny, hit.nz, hit.surface); S3.Audio.knifeWall(actor.isLocal ? null : actor.pos);
+          if (!actor.isLocal && actor.isPlayer && this.net) this.net.sendMeleeFeedback(actor, alt, 'world', new V3(hit.x, hit.y, hit.z), { x: hit.nx, y: hit.ny, z: hit.nz }, null, null, false);
+        } else {
+          S3.Audio.knifeSwing(actor.isLocal ? null : actor.pos);
+          if (!actor.isLocal && actor.isPlayer && this.net) this.net.sendMeleeFeedback(actor, alt, null, null, null, null, null, false);
+        }
       }, alt ? 220 : 90);
+      this.emitNoise(actor, 6);
+    }
+    // Cosmetic-only local echo of a knife swing for a CLIENT's own player: instant viewmodel
+    // animation + swing sound; the authoritative hit (if any) arrives via the host's 'melee' event.
+    actorKnifeCosmetic(actor, alt) {
+      this.vm.play(alt ? 'knife2' : 'knife1', alt ? 0.5 : 0.3);
+      setTimeout(() => { if (actor.alive) S3.Audio.knifeSwing(null); }, alt ? 220 : 90);
       this.emitNoise(actor, 6);
     }
     explosionDamage(owner, pos, radius, maxDmg, weaponId) {
@@ -199,8 +271,9 @@
         if (!a.alive) continue; const cx = a.pos.x, cy = a.pos.y + 0.9, cz = a.pos.z; const d = Math.hypot(cx - pos.x, cy - pos.y, cz - pos.z); if (d > radius) continue;
         const clear = this.world.lineOfSight(pos.x, pos.y + 0.2, pos.z, cx, cy, cz, false); let dmg = maxDmg * Math.pow(1 - d / radius, 1.1); if (!clear) dmg *= 0.25;
         if (dmg < 1) continue; const dx = (cx - pos.x) / (d + 0.01), dz = (cz - pos.z) / (d + 0.01);
-        const dealt = a.takeDamage(dmg, owner, 'body', weaponId, dx, dz, { grenade: true }); if (owner && owner.isPlayer && dealt > 0 && a !== owner) { this.hud.hitmarkerShow(false, !a.alive); S3.Audio.hitmarker(false); }
-        if (a.isPlayer) this.shake(pos, 10, 0.4);
+        const dealt = a.takeDamage(dmg, owner, 'body', weaponId, dx, dz, { grenade: true });
+        if (owner && dealt > 0 && a !== owner) { if (owner.isLocal) { this.hud.hitmarkerShow(false, !a.alive); S3.Audio.hitmarker(false); } else if (owner.isPlayer && this.net) this.net.sendHitmarker(owner, false, !a.alive); }
+        this.shake(pos, 10, 0.4);
       }
     }
     flashActors(owner, pos, radius) {
@@ -209,7 +282,7 @@
         if (!this.world.lineOfSight(pos.x, pos.y, pos.z, eye.x, eye.y, eye.z, true)) continue;
         const fwd = a.forward(this.tmp2); const to = this.tmp3.set(pos.x - eye.x, pos.y - eye.y, pos.z - eye.z).normalize(); const dot = fwd.dot(to);
         let dur = 4.5 * (1 - d / radius * 0.5); if (dot > 0.4) dur *= 1; else if (dot > -0.3) dur *= 0.5; else dur *= 0.2;
-        if (dur < 0.3) continue; a.flashT = Math.max(a.flashT, dur); a.flashMax = dur; if (a.isPlayer) S3.Audio.flashRing(dur * 0.7); if (a.isBot) { a.target = null; }
+        if (dur < 0.3) continue; a.flashT = Math.max(a.flashT, dur); a.flashMax = dur; if (a.isLocal) S3.Audio.flashRing(dur * 0.7); else if (a.isPlayer && this.net) this.net.sendFlashed(a, dur); if (a.isBot) { a.target = null; }
       }
     }
     throwGrenade(actor, weapon, strength) {
@@ -218,9 +291,9 @@
       const vel = dir.clone().multiplyScalar(6 + 13 * strength); vel.y += 2.5 * strength; vel.add(actor.vel);
       // avoid spawning inside a wall
       if (this.world.raycast(eye.x, eye.y, eye.z, dir.x, dir.y, dir.z, 0.5)) origin.copy(eye);
-      this.effects.spawnGrenade(actor, weapon.id, origin, vel); if (actor.isPlayer) S3.Audio.throwSound(); else S3.Audio.throwSound();
+      const gObj = this.effects.spawnGrenade(actor, weapon.id, origin, vel); S3.Audio.throwSound(); if (this.net && this.net.role === 'host') this.net.sendNadeThrow(gObj);
       const id = weapon.id; actor.consumeGrenade(weapon);
-      if (actor.hasGrenade(id)) { const g = actor.hasGrenade(id); if (actor.current !== g) actor.select(g, true); else { g.draw(); if (actor.isPlayer) this.vm.play('draw', 0.4); } }
+      if (actor.hasGrenade(id)) { const g = actor.hasGrenade(id); if (actor.current !== g) actor.select(g, true); else { g.draw(); if (actor.isLocal) this.vm.play('draw', 0.4); } }
       else if (actor.isPlayer) { setTimeout(() => { if (actor.alive && actor.current.def.type === 'grenade' && actor.current.count <= 0) actor.select(actor.bestWeapon(), true); }, 350); }
       if (actor.isPlayer) this.radioMaybe(actor, id);
     }
@@ -236,18 +309,23 @@
       const w = best.weapon; const slot = w.def.slot; const cur = actor.inv[slot];
       if (cur) { if (actor.isBot) return false; this.dropWeaponFrom(actor, cur, false); }
       actor.inv[slot] = w; w.draw(); this.effects.removePickup(best); if (actor.isPlayer || !actor.inv.primary || slot === 'primary') actor.select(w, true); S3.Audio.pickup();
-      if (actor.isPlayer) this.hud.addChat(`<span class="sys">Подобрано: ${w.def.name}</span>`);
+      if (actor.isLocal) this.hud.addChat(`<span class="sys">Подобрано: ${w.def.name}</span>`);
       return true;
     }
     onActorDeath(v, attacker, weaponId, headshot) {
       const a = attacker && attacker !== v ? attacker : null;
-      if (a && this.isEnemy(a, v)) { a.kills++; a.roundKills++; a.score += headshot ? 2 : 1; if (headshot) a.headshots++; if (a.isPlayer) { S3.Stats.data.kills++; if (headshot) S3.Stats.data.headshots++; S3.Audio.killConfirm(); this.hud.hitmarkerShow(headshot, true); } }
-      else if (a && !this.isEnemy(a, v)) { a.score -= 1; if (a.isPlayer) this.hud.addChat('<span class="sys" style="color:#ff6060">Вы убили союзника!</span>'); }
-      else if (!a && v.isPlayer) { }
+      if (a && this.isEnemy(a, v)) {
+        a.kills++; a.roundKills++; a.score += headshot ? 2 : 1; if (headshot) a.headshots++;
+        if (a.isLocal) { S3.Stats.data.kills++; if (headshot) S3.Stats.data.headshots++; S3.Audio.killConfirm(); this.hud.hitmarkerShow(headshot, true); }
+        else if (a.isPlayer && this.net) this.net.sendKillConfirm(a, headshot);
+      }
+      else if (a && !this.isEnemy(a, v)) { a.score -= 1; if (a.isLocal) this.hud.addChat('<span class="sys" style="color:#ff6060">Вы убили союзника!</span>'); }
       // assists
       for (const id in v.damagers) { if (+id === (a ? a.id : -1)) continue; const dm = v.damagers[id]; if (dm >= 40) { const helper = this.actors.find((x) => x.id === +id); if (helper && this.isEnemy(helper, v)) { helper.assists++; helper.score += 1; } } }
-      if (v.isPlayer) { S3.Stats.data.deaths++; S3.Audio.death(); v.spectateTarget = a && this.mode.id !== 'ffa' ? a : null; if (a && a !== v) this.hud.addChat(`<span class="sys">Вас убил ${a.name} (${S3.WEAPONS[weaponId] ? S3.WEAPONS[weaponId].name : weaponId})${headshot ? ' — в голову' : ''}</span>`); }
+      if (v.isLocal) { S3.Stats.data.deaths++; S3.Audio.death(); v.spectateTarget = a && this.mode.id !== 'ffa' ? a : null; if (a && a !== v) this.hud.addChat(`<span class="sys">Вас убил ${a.name} (${S3.WEAPONS[weaponId] ? S3.WEAPONS[weaponId].name : weaponId})${headshot ? ' — в голову' : ''}</span>`); }
+      else if (v.isPlayer && this.net) this.net.sendDeathFeedback(v, a, weaponId, headshot);
       this.hud.killfeed(a, v, weaponId, headshot);
+      if (this.net && this.net.role === 'host') this.net.broadcastKillfeed(a, v, weaponId, headshot);
       if (a && a.isBot && this.isEnemy(a, v) && Math.random() < 0.35) this.radio(a, S3.pick(['Враг уничтожен!', 'Минус один!', 'Готов!', 'Есть!']));
       // drop weapon
       const drop = v.inv.primary || (v.inv.secondary && v.inv.secondary.def.price > 300 ? v.inv.secondary : null);
@@ -270,17 +348,26 @@
       this.render(dt); S3.Input.endFrame();
     }
     update(dt) {
-      const I = S3.Input; const p = this.player;
+      const I = S3.Input; const p = this.player; const isClient = this.net && this.net.role === 'client';
       if (I.justPressed('scoreboard')) this.hud.toggleScoreboard(true); if (I.justReleased('scoreboard')) this.hud.toggleScoreboard(false);
       p.handleInput(dt);
-      this.mode.update(dt);
-      for (const a of this.actors) {
-        if (a.alive) { if (a.isBot) a.think(dt); a.updateMovement(dt); a.updateWeapon(dt); }
-        else { a.deadT += dt; }
-        if (a.isBot) a.updateModel(dt);
+      if (isClient) {
+        // capture the just-computed transient intent BEFORE updateMovement/updateWeapon consume it
+        this.net.sendInput(S3.buildInputPacket(p));
+        p.updateMovement(dt); p.updateWeapon(dt);
+        this.net.update(dt); // puppet interpolation + local reconciliation
+      } else {
+        if (this.net && this.net.role === 'host') this.net.applyAllInputs(dt);
+        this.mode.update(dt);
+        for (const a of this.actors) {
+          if (a.alive) { if (a.isBot) a.think(dt); a.updateMovement(dt); a.updateWeapon(dt); }
+          else { a.deadT += dt; }
+          a.updateModel(dt);
+        }
+        // bots auto pickup weapons if they lack a primary
+        this.pickupT -= dt; if (this.pickupT <= 0) { this.pickupT = 0.5; for (const b of this.bots) { if (!b.alive || b.inv.primary) continue; for (const pk of this.effects.pickups) { if (!pk.isBomb && pk.rest && pk.weapon.def.slot === 'primary' && pk.pos.distanceTo(b.pos) < 1.6) { this.tryPickup(b); break; } } } }
+        if (this.net && this.net.role === 'host') this.net.tickSnapshot(dt);
       }
-      // bots auto pickup weapons if they lack a primary
-      this.pickupT -= dt; if (this.pickupT <= 0) { this.pickupT = 0.5; for (const b of this.bots) { if (!b.alive || b.inv.primary) continue; for (const pk of this.effects.pickups) { if (!pk.isBomb && pk.rest && pk.weapon.def.slot === 'primary' && pk.pos.distanceTo(b.pos) < 1.6) { this.tryPickup(b); break; } } } }
       this.effects.update(dt);
       this.radarT -= dt; if (this.radarT <= 0) { this.radarT = 0.15; this.updateRadarVis(); }
       // camera

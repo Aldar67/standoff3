@@ -67,7 +67,7 @@
       const aName = att ? `<span style="color:${S3.TEAM_COLOR_CSS[att.team]}">${att.name}</span>` : '';
       const wName = weaponId === 'he' ? '💣' : weaponId === 'molotov' ? '🔥' : weaponId === 'bomb' ? '🧨' : weaponId === 'fall' ? '⤓' : weaponId === 'knife' ? '🔪' : (S3.WEAPONS[weaponId] ? S3.WEAPONS[weaponId].name : weaponId);
       item.innerHTML = `${aName} <span class="kf-w">${wName}${headshot ? ' <b class="hs">HS</b>' : ''}</span> <span style="color:${S3.TEAM_COLOR_CSS[vic.team]}">${vic.name}</span>${extra ? ' ' + extra : ''}`;
-      if (att && att.isPlayer) item.classList.add('mine'); if (vic.isPlayer) item.classList.add('me');
+      if (att && att.isLocal) item.classList.add('mine'); if (vic.isLocal) item.classList.add('me');
       this.feedItems.push(item); if (this.feedItems.length > 6) { const old = this.feedItems.shift(); old.remove(); }
       setTimeout(() => { item.classList.add('fade'); setTimeout(() => { item.remove(); const i = this.feedItems.indexOf(item); if (i >= 0) this.feedItems.splice(i, 1); }, 500); }, 6000);
     }
@@ -81,10 +81,12 @@
     // ---- scoreboard ----
     toggleScoreboard(v) { this.sbVisible = v; this.sb.style.display = v ? 'block' : 'none'; if (v) this.renderScoreboard(); }
     renderScoreboard() {
-      const g = this.game; const mode = g.mode; const rows = (team) => g.actors.filter((a) => a.team === team).sort((a, b) => b.score - a.score || b.kills - a.kills).map((a) => `<tr class="${a.isPlayer ? 'me' : ''} ${a.alive ? '' : 'dead'}"><td>${a.name}${a.hasBomb ? ' 🧨' : ''}${a.defuser ? ' 🧰' : ''}</td><td>${a.kills}</td><td>${a.assists}</td><td>${a.deaths}</td><td>${a.score}</td><td>${mode.freeBuy ? '-' : S3.fmtMoney(a.money)}</td><td>${a.isBot ? (S3.DIFFICULTY[a.diffName] || {}).name || '' : 'Игрок'}</td></tr>`).join('');
+      const g = this.game; const mode = g.mode;
+      const roleLabel = (a) => a.isBot ? ((S3.DIFFICULTY[a.diffName] || {}).name || '') : (a.isLocal ? 'Вы' : 'Игрок');
+      const rows = (team) => g.actors.filter((a) => a.team === team).sort((a, b) => b.score - a.score || b.kills - a.kills).map((a) => `<tr class="${a.isLocal ? 'me' : ''} ${a.alive ? '' : 'dead'}"><td>${a.name}${a.hasBomb ? ' 🧨' : ''}${a.defuser ? ' 🧰' : ''}</td><td>${a.kills}</td><td>${a.assists}</td><td>${a.deaths}</td><td>${a.score}</td><td>${mode.freeBuy ? '-' : S3.fmtMoney(a.money)}</td><td>${roleLabel(a)}</td></tr>`).join('');
       const head = '<tr><th>Имя</th><th>У</th><th>П</th><th>С</th><th>Очки</th><th>$</th><th></th></tr>';
       const ffa = mode.id === 'ffa';
-      const allRows = ffa ? g.actors.slice().sort((a, b) => b.kills - a.kills).map((a) => `<tr class="${a.isPlayer ? 'me' : ''} ${a.alive ? '' : 'dead'}"><td>${a.name}</td><td>${a.kills}</td><td>${a.assists}</td><td>${a.deaths}</td><td>${a.score}</td><td>-</td><td>${a.isBot ? (S3.DIFFICULTY[a.diffName] || {}).name || '' : 'Игрок'}</td></tr>`).join('') : '';
+      const allRows = ffa ? g.actors.slice().sort((a, b) => b.kills - a.kills).map((a) => `<tr class="${a.isLocal ? 'me' : ''} ${a.alive ? '' : 'dead'}"><td>${a.name}</td><td>${a.kills}</td><td>${a.assists}</td><td>${a.deaths}</td><td>${a.score}</td><td>-</td><td>${roleLabel(a)}</td></tr>`).join('') : '';
       this.sb.innerHTML = `<div class="sb-head"><div class="sb-title">${g.map.def.title} — ${S3.MODES[mode.id].name}</div><div class="sb-score">${ffa ? '' : `<span class="ct">${S3.TEAM_NAME.CT}: ${mode.score.CT}</span> — <span class="t">${S3.TEAM_NAME.T}: ${mode.score.T}</span>`}</div></div>` +
         (ffa ? `<table class="sb-table">${head}${allRows}</table>` : `<table class="sb-table ct"><caption>${S3.TEAM_NAME.CT}</caption>${head}${rows('CT')}</table><table class="sb-table t"><caption>${S3.TEAM_NAME.T}</caption>${head}${rows('T')}</table>`);
     }
@@ -94,6 +96,7 @@
       if (open && !g.mode.canBuy(g.player)) { this.addChat('<span class="sys">Покупка сейчас недоступна</span>'); S3.Audio.error(); return; }
       this.buyOpen = open; this.buy.style.display = open ? 'flex' : 'none';
       if (open) { this.renderBuy(); S3.Input.unlock(); S3.Audio.uiClick(); } else { S3.Input.lock(); }
+      if (g.net && g.net.role === 'client') g.net.sendBuyOpen(open);
     }
     renderBuy() {
       const g = this.game, p = g.player; const cats = S3.BUY_CATEGORIES; const free = g.mode.freeBuy;
@@ -115,8 +118,8 @@
     }
     weaponSvg(w) { const len = Math.min(80, 30 + (w.type === 'sniper' ? 50 : w.type === 'rifle' || w.type === 'mg' ? 40 : w.type === 'shotgun' ? 42 : w.type === 'smg' ? 26 : 12)); return `<svg width="90" height="24" viewBox="0 0 90 24"><rect x="4" y="9" width="${len}" height="6" rx="2" fill="#cfd6e0"/><rect x="${len - 6}" y="9" width="8" height="12" rx="1" fill="#9aa3b0"/><rect x="${Math.max(10, len * 0.45)}" y="14" width="6" height="8" rx="1" fill="#9aa3b0"/></svg>`; }
     tryBuy(id) {
-      const p = this.game.player; const r = p.buy(id);
-      if (r.ok) { S3.Audio.buy(); const w = S3.WEAPONS[id]; if (!w) S3.Audio.armorEquip(); this.renderBuy(); } else { S3.Audio.error(); this.addChat(`<span class="sys">${r.reason}</span>`); }
+      const g = this.game, p = g.player; const r = p.buy(id);
+      if (r.ok) { S3.Audio.buy(); const w = S3.WEAPONS[id]; if (!w) S3.Audio.armorEquip(); this.renderBuy(); if (g.net && g.net.role === 'client') g.net.sendBuy(id); } else { S3.Audio.error(); this.addChat(`<span class="sys">${r.reason}</span>`); }
     }
     buyKey(code) {
       if (!this.buyOpen) return false;

@@ -202,3 +202,22 @@ input[type=range] { accent-color: #ffb040; width: 180px; }
 .bi-stats { font-size: 0.75em; color: #9ab; }
 .bi-price { color: #6fdc6f; font-weight: 700; min-width: 60px; text-align: right; }
 .buy-foot { padding: 8px 18px; font-size: 0.8em; color: #789; border-top: 1px solid #253244; }
+
+/* ---------- multiplayer menu ---------- */
+.net-tabs { display: flex; gap: 8px; width: 100%; margin-bottom: 4px; }
+.net-tab { flex: 1; text-align: center; padding: 10px; border-radius: 8px; background: #141c26; border: 1px solid #2a3a4c; cursor: pointer; font-weight: 600; }
+.net-tab:hover { border-color: #5a7a9c; }
+.net-tab.act { border-color: #ffb040; background: #1e2a38; color: #ffd070; }
+.net-pane { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.net-info { background: #141c26; border: 1px solid #2a3a4c; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #aab; line-height: 1.5; }
+.net-info code { color: #ffd070; }
+.net-status { font-size: 14px; min-height: 20px; }
+.net-status.err { color: #ff6060; }
+.net-status.ok { color: #6fdc6f; }
+.net-players { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+.net-player-row { display: flex; align-items: center; justify-content: space-between; background: #141c26; border-radius: 6px; padding: 6px 12px; font-size: 14px; }
+.net-player-row .np-team { font-size: 12px; padding: 2px 8px; border-radius: 4px; }
+.net-player-row .np-team.ct { background: rgba(80,160,240,0.2); color: #50a0f0; }
+.net-player-row .np-team.t { background: rgba(232,176,64,0.2); color: #e8b040; }
+.net-player-row.self { border: 1px solid #ffb040; }
+.net-wait-box { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 20px; }

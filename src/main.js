@@ -11,6 +11,7 @@
   ];
   const state = { mode: 'defuse', map: 'sandstone', team: 'CT', bots: 5, difficulty: 'medium', rounds: 16, killLimit: 60, primary: 'akr', secondary: 'usp' };
   let game = null; let previews = {};
+  const net = { conn: null, role: null, players: [] }; // lobby-time connection, before a Game exists
 
   function mapPreview(id) {
     if (previews[id]) return previews[id];
@@ -71,20 +72,33 @@
   }
 
   // ---- game lifecycle ----
-  function startGame() {
+  function startGame(extra) {
     S3.Audio.init(); S3.Audio.resume(); S3.Audio.stopMenuMusic();
     $('#menu').style.display = 'none'; $('#hud').style.display = 'block'; $('#loading').style.display = 'flex';
     setTimeout(() => {
       try {
-        game = new S3.Game({ map: state.map, mode: state.mode, playerTeam: state.team, botsPerTeam: state.bots, difficulty: state.difficulty, rounds: state.rounds, killLimit: state.killLimit, loadout: { primary: state.primary, secondary: state.secondary } });
-        window.game = game; game.onMatchOver = onMatchOver; game.init();
+        const opts = Object.assign({ map: state.map, mode: state.mode, playerTeam: state.team, botsPerTeam: state.bots, difficulty: state.difficulty, rounds: state.rounds, killLimit: state.killLimit, loadout: { primary: state.primary, secondary: state.secondary } }, extra || {});
+        game = new S3.Game(opts);
+        window.game = game; game.onMatchOver = onMatchOver; game.onNetLost = onNetLost; game.init();
         $('#loading').style.display = 'none'; S3.Input.lock();
       } catch (e) { console.error(e); $('#loading').style.display = 'none'; alert('Ошибка запуска: ' + e.message); quitToMenu(); }
     }, 60);
   }
+  function onNetLost() {
+    if (!game) return;
+    const wasHost = game.net && game.net.role === 'host';
+    game.setPaused(true);
+    if (confirm(wasHost ? 'Связь с сетевым сервером потеряна. Вернуться в меню?' : 'Хост отключился. Вернуться в меню?')) quitToMenu();
+  }
   function quitToMenu() {
     if (game) { game.destroy(); game = null; window.game = null; }
+    resetNetLobby();
     $('#pause').style.display = 'none'; $('#matchover').style.display = 'none'; $('#hud').style.display = 'none'; $('#menu').style.display = 'flex'; showPanel('panel-main'); S3.Audio.startMenuMusic();
+  }
+  function resetNetLobby() {
+    if (net.conn) { net.conn.close(); net.conn = null; } net.role = null; net.players = [];
+    $('#net-lobby').style.display = 'none'; $('#net-host-status').textContent = ''; $('#net-host-status').className = 'net-status';
+    $('#net-join-status').textContent = ''; $('#net-join-status').className = 'net-status';
   }
   function onMatchOver(winner, text) {
     if (!game) return; game.setPaused(true); const p = game.player; const won = winner === p.team;
@@ -96,9 +110,90 @@
   function pauseGame() { if (!game || game.over) return; game.setPaused(true); $('#pause').style.display = 'flex'; }
   function resumeGame() { if (!game) return; $('#pause').style.display = 'none'; $('#panel-settings-pause').style.display = 'none'; game.paused = false; game.lastFrame = performance.now(); S3.Input.lock(); }
 
+  // ---- network menu ----
+  function netTabSwitch(which) {
+    $$('.net-tab').forEach((t) => t.classList.toggle('act', t.dataset.nettab === which));
+    $('#net-host-pane').style.display = which === 'host' ? 'flex' : 'none';
+    $('#net-join-pane').style.display = which === 'join' ? 'flex' : 'none';
+    S3.Audio.uiClick();
+  }
+  function computeRoster() {
+    const rows = [{ isHost: true, name: $('#net-host-name').value.trim() || S3.Settings.data.playerName || 'Хост' }];
+    let ct = state.team === 'CT' ? 1 : 0, t = state.team === 'T' ? 1 : 0;
+    rows[0].team = state.team;
+    for (const p of net.players) { const team = ct <= t ? 'CT' : 'T'; rows.push({ id: p.id, name: p.name, team }); if (team === 'CT') ct++; else t++; }
+    return rows;
+  }
+  function renderNetPlayers() {
+    const rows = computeRoster();
+    $('#net-players').innerHTML = rows.map((p) => `<div class="net-player-row ${p.isHost ? 'self' : ''}"><span>${p.name}${p.isHost ? ' (вы, хост)' : ''}</span><span class="np-team ${p.team === 'CT' ? 'ct' : 't'}">${p.team}</span></div>`).join('');
+  }
+  function renderNetLobby() {
+    const modes = $('#net-mode-list'); modes.innerHTML = Object.keys(S3.MODES).map((m) => `<div class="card mode ${state.mode === m ? 'sel' : ''}" data-mode="${m}"><div class="card-title">${S3.MODES[m].name}</div><div class="card-desc">${S3.MODES[m].desc}</div></div>`).join('');
+    modes.querySelectorAll('.card').forEach((c) => c.addEventListener('click', () => { state.mode = c.dataset.mode; const m = MAP_LIST.find((x) => x.id === state.map); if (!m.modes.includes(state.mode)) state.map = MAP_LIST.find((x) => x.modes.includes(state.mode)).id; renderNetLobby(); S3.Audio.uiClick(); }));
+    const maps = $('#net-map-list'); maps.innerHTML = MAP_LIST.map((m) => { const ok = m.modes.includes(state.mode); return `<div class="card map ${state.map === m.id ? 'sel' : ''} ${ok ? '' : 'dis'}" data-map="${m.id}"><img src="${mapPreview(m.id)}" alt=""><div class="card-title">${m.title}</div><div class="card-desc">${m.desc}</div></div>`; }).join('');
+    maps.querySelectorAll('.card').forEach((c) => c.addEventListener('click', () => { if (c.classList.contains('dis')) return; state.map = c.dataset.map; renderNetLobby(); S3.Audio.uiClick(); }));
+    $$('#net-team-sel .opt').forEach((o) => { o.classList.toggle('sel', o.dataset.team === state.team); o.onclick = () => { state.team = o.dataset.team; renderNetLobby(); }; });
+    $$('#net-diff-sel .opt').forEach((o) => { o.classList.toggle('sel', o.dataset.diff === state.difficulty); o.onclick = () => { state.difficulty = o.dataset.diff; renderNetLobby(); }; });
+    $('#net-bots-range').value = state.bots; $('#net-bots-val').textContent = state.bots;
+    renderNetPlayers();
+  }
+  function hostConnect() {
+    const name = $('#net-host-name').value.trim() || 'Хост'; const addr = $('#net-host-addr').value.trim() || 'ws://localhost:8766';
+    S3.Settings.data.playerName = name; S3.Settings.save();
+    const status = $('#net-host-status'); status.textContent = 'Подключение к серверу...'; status.className = 'net-status';
+    const n = new S3.Net();
+    n.on('hello', (msg) => { if (!net.players.find((p) => p.id === msg._from)) net.players.push({ id: msg._from, name: msg.name }); renderNetPlayers(); });
+    n.on('leave', (id) => { net.players = net.players.filter((p) => p.id !== id); renderNetPlayers(); });
+    n.connect(addr, name, true).then(() => {
+      net.conn = n; net.role = 'host';
+      status.textContent = 'Сервер подключен. Настройте матч и нажмите «Начать игру».'; status.className = 'net-status ok';
+      $('#net-lobby').style.display = 'block'; renderNetLobby();
+    }).catch((e) => { status.textContent = 'Не удалось подключиться — убедитесь, что запущен Standoff3-Host.bat. (' + e.message + ')'; status.className = 'net-status err'; });
+  }
+  function netStartGame() {
+    if (!net.conn) return;
+    const roster = computeRoster(); const hostEntry = roster.find((r) => r.isHost); const others = roster.filter((r) => !r.isHost);
+    net.conn.send({ t: 'ev', k: 'start', map: state.map, mode: state.mode, rounds: state.rounds, killLimit: state.killLimit, timeLimit: state.mode === 'tdm' ? 600 : 900, botsPerTeam: state.bots, difficulty: state.difficulty, roster: others.map((o) => ({ id: o.id, name: o.name, team: o.team })) });
+    const connForGame = net.conn; net.conn = null; // ownership moves to the Game/HostSync now
+    startGame({ playerTeam: hostEntry.team, botsPerTeam: state.bots, net: { role: 'host', net: connForGame, roster: others } });
+  }
+  function joinConnect() {
+    const name = $('#net-join-name').value.trim() || 'Игрок'; const addr = $('#net-join-addr').value.trim();
+    const status = $('#net-join-status');
+    if (!addr) { status.textContent = 'Введите адрес хоста'; status.className = 'net-status err'; return; }
+    S3.Settings.data.playerName = name; S3.Settings.save();
+    status.textContent = 'Подключение...'; status.className = 'net-status';
+    const n = new S3.Net();
+    n.on('ev', (msg) => {
+      if (msg.k === 'start') {
+        const me = msg.roster.find((r) => r.id === n.myId); const connForGame = n; net.conn = null;
+        startGame({ map: msg.map, mode: msg.mode, rounds: msg.rounds, killLimit: msg.killLimit, timeLimit: msg.timeLimit, botsPerTeam: msg.botsPerTeam, difficulty: msg.difficulty, net: { role: 'client', net: connForGame, myTeam: me ? me.team : 'CT' } });
+      } else if (msg.k === 'toolate' && msg.for === n.myId) { status.textContent = 'Хост уже начал матч. Дождитесь следующего.'; status.className = 'net-status err'; }
+    });
+    n.on('hostleft', () => { if (!game) { status.textContent = 'Хост отключился.'; status.className = 'net-status err'; } });
+    n.connect(addr, name, false).then(() => { net.conn = n; net.role = 'client'; status.textContent = 'Подключено. Ожидание запуска матча хостом...'; status.className = 'net-status ok'; })
+      .catch((e) => { status.textContent = 'Не удалось подключиться (' + e.message + ')'; status.className = 'net-status err'; });
+  }
+  function bindNetworkMenu() {
+    $$('.net-tab').forEach((t) => t.addEventListener('click', () => netTabSwitch(t.dataset.nettab)));
+    $('#net-host-name').value = S3.Settings.data.playerName || 'Игрок'; $('#net-join-name').value = S3.Settings.data.playerName || 'Игрок';
+    $('#btn-net-host-connect').addEventListener('click', hostConnect);
+    $('#btn-net-start').addEventListener('click', netStartGame);
+    $('#btn-net-join-connect').addEventListener('click', joinConnect);
+    $('#net-bots-range').addEventListener('input', (e) => { state.bots = +e.target.value; $('#net-bots-val').textContent = state.bots; });
+  }
+
   function bindMenu() {
-    $$('[data-panel]').forEach((b) => b.addEventListener('click', () => { const id = b.dataset.panel; if (id === 'panel-play') renderPlay(); if (id === 'panel-settings') renderSettings(); if (id === 'panel-stats') renderStats(); showPanel(id); }));
-    $('#btn-start').addEventListener('click', startGame);
+    $$('[data-panel]').forEach((b) => b.addEventListener('click', () => {
+      const id = b.dataset.panel;
+      if (id === 'panel-main' && net.conn && !game) resetNetLobby(); // leaving the network panel without starting: drop the lobby connection
+      if (id === 'panel-play') renderPlay(); if (id === 'panel-settings') renderSettings(); if (id === 'panel-stats') renderStats();
+      if (id === 'panel-network') { $('#net-host-name').value = S3.Settings.data.playerName || 'Игрок'; $('#net-join-name').value = S3.Settings.data.playerName || 'Игрок'; }
+      showPanel(id);
+    }));
+    bindNetworkMenu();
+    $('#btn-start').addEventListener('click', () => startGame());
     $('#bots-range').addEventListener('input', (e) => { state.bots = +e.target.value; $('#bots-val').textContent = state.bots + ' на команду'; });
     $('#settings-form').addEventListener('input', applySettingsFromForm); $('#settings-form').addEventListener('change', applySettingsFromForm);
     $('#btn-reset-stats').addEventListener('click', () => { if (confirm('Сбросить статистику?')) { Object.keys(S3.Stats.data).forEach((k) => S3.Stats.data[k] = 0); S3.Stats.save(); renderStats(); } });
@@ -118,7 +213,7 @@
       if (e.code === 'F11') { e.preventDefault(); if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => { }); else document.exitFullscreen(); }
       // radio menu (Z + number)
       if (e.code === 'KeyZ' && game.player.alive) { game.radioOpen = !game.radioOpen; game.hud.setHint(game.radioOpen ? 'Радио: ' + S3.RADIO.map((r) => r.key + '-' + r.text).join('  ') : ''); if (game.radioOpen) game.hud.hintT = -5; }
-      else if (game.radioOpen && /^Digit[1-9]$/.test(e.code)) { const r = S3.RADIO.find((x) => x.key === e.code.slice(5)); if (r) { game.radio(game.player, r.text); } game.radioOpen = false; game.hud.setHint(''); e.preventDefault(); }
+      else if (game.radioOpen && /^Digit[1-9]$/.test(e.code)) { const r = S3.RADIO.find((x) => x.key === e.code.slice(5)); if (r) { if (game.net && game.net.role === 'client') game.net.sendRadio(r.key); else game.radio(game.player, r.text); } game.radioOpen = false; game.hud.setHint(''); e.preventDefault(); }
     });
     $('#menu-version').textContent = 'v1.0 · Three.js r158 · процедурные текстуры и звук';
   }

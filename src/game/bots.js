@@ -15,7 +15,7 @@
       this.burstLeft = 0; this.pauseT = 0; this.aimErr = new THREE.Vector3(); this.aimErrT = 0; this.aimPoint = V(); this.lookYaw = 0; this.lookPitch = 0;
       this.stuckT = 0; this.lastProgress = V(); this.progressT = 0; this.jumpCooldown = 0; this.crouchT = 0;
       this.objective = null; this.objT = 0; this.radioT = 0; this.grenadeT = 5 + Math.random() * 10; this.lookAroundT = 0; this.wanderT = 0;
-      this.tmpA = V(); this.tmpB = V(); this.tmpC = V(); this.personality = { aggression: Math.random(), patience: Math.random(), camper: Math.random() < 0.25 };
+      this.tmpA = V(); this.tmpB = V(); this.tmpC = V(); this.tmpD = V(); this.bodyYaw = 0; this.personality = { aggression: Math.random(), patience: Math.random(), camper: Math.random() < 0.25 };
       this.onWeaponChange = (w) => this.model.setWeapon(w.id);
       this.model.setWeapon('knife');
       this.compensation = { easy: 0.25, medium: 0.5, hard: 0.75, expert: 0.92 }[this.diffName];
@@ -188,7 +188,7 @@
         const tp = vis ? t.pos : m.lastPos;
         if (dist > (vis ? 6 : 1.5)) { this.setGoal(tp.x, tp.z, vis ? 4 : 1.2, 'chase'); this.followPath(dt); }
         else if (vis && this.moveMode === 'strafe') { const r = this.right(this.tmpC); wd.set(r.x * this.strafeDir, 0, r.z * this.strafeDir); }
-      } else if (tooClose) { const f = this.flatForward(this.tmpC); wd.set(-f.x, 0, -f.z); }
+      } else if (tooClose) { const f = this.flatForward(this.tmpC); const r = this.right(this.tmpD); const kd = this.strafeDir || 1; wd.set(-f.x * 0.85 + r.x * kd * 0.45, 0, -f.z * 0.85 + r.z * kd * 0.45); }
       else if (vis && this.moveMode === 'strafe' && this.diff.strafe > 0.2) { const r = this.right(this.tmpC); wd.set(r.x * this.strafeDir, 0, r.z * this.strafeDir); }
       // if not visible for a while: hunt
       if (!vis && game.time - m.lastSeen > 0.8) { this.state = 'hunt'; this.setGoal(m.lastPos.x, m.lastPos.z, 1.5, 'hunt'); }
@@ -303,8 +303,7 @@
       if (!T && this.money >= 400 && Math.random() < 0.6) this.buy('defuser');
     }
     updateModel(dt) {
-      const m = this.model; if (!m) return; m.root.position.copy(this.pos); m.root.rotation.y = this.yaw;
-      m.update(dt, this.alive ? Math.min(1, this.speedFrac * 1.2) : 0, this.crouchAmt, this.pitch, this.firing > 0);
+      S3.animateCharacterVisual(this, dt);
     }
   }
   S3.Bot = Bot;

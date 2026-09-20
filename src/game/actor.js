@@ -9,6 +9,9 @@
     constructor(game, opts) {
       this.game = game; this.id = nextId++;
       this.name = opts.name || 'Actor'; this.team = opts.team || 'CT'; this.isBot = !!opts.isBot; this.isPlayer = !this.isBot;
+      // isLocal: true only for the actual human sitting at THIS machine (drives viewmodel/HUD/2D-audio/stat-tracking).
+      // Defaults to isPlayer (unchanged behaviour for solo play & bots); explicitly false for network puppets/remote humans.
+      this.isLocal = opts.isLocal !== undefined ? opts.isLocal : this.isPlayer;
       this.pos = new THREE.Vector3(); this.vel = new THREE.Vector3(); this.yaw = 0; this.pitch = 0;
       this.punchPitch = 0; this.punchYaw = 0;
       this.body = { pos: this.pos, vel: this.vel, r: PH.radius, h: PH.height, onGround: false, groundSurface: 'concrete', jumping: false, landSpeed: 0 };
@@ -27,6 +30,9 @@
       this.footstepT = 0; this.tmpV = new THREE.Vector3(); this.speedFrac = 0; this.firing = 0;
       this.lastNoiseT = 0; this.ping = 0;
     }
+    // generic third-person visual update for any actor that carries a CharacterModel
+    // (bots override this with an identical call; remote-human actors and client puppets use it directly)
+    updateModel(dt) { if (this.model) S3.animateCharacterVisual(this, dt); }
     get eyeHeight() { return PH.eyeStand - (PH.eyeStand - PH.eyeCrouch) * this.crouchAmt; }
     eyePos(out) { out = out || this.tmpV; return out.set(this.pos.x, this.pos.y + this.eyeHeight, this.pos.z); }
     forward(out) { out = out || new THREE.Vector3(); const cp = Math.cos(this.pitch); return out.set(-Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp); }
@@ -58,7 +64,7 @@
       if (this.current && this.current !== w) { this.lastWeapon = this.current; }
       this.current = w; w.draw(); this.scoped = false; this.zoomLevel = 0; this.planting = false;
       if (this.onWeaponChange) this.onWeaponChange(w);
-      if (this.isPlayer) S3.Audio.weaponSwitch(); else S3.Audio.weaponSwitch(this.pos);
+      if (this.isLocal) S3.Audio.weaponSwitch(); else S3.Audio.weaponSwitch(this.pos);
     }
     selectSlot(n) {
       const inv = this.inv; let w = null;
@@ -137,7 +143,7 @@
         const sp = Math.hypot(v.x, v.z);
         if (sp > 0.001) { const drop = Math.max(sp, PH.stopSpeed) * PH.friction * dt; const ns = Math.max(0, sp - drop) / sp; v.x *= ns; v.z *= ns; } else { v.x = 0; v.z = 0; }
         if (wishSpeed > 0) { const cur = v.x * wd.x + v.z * wd.z; const add = wishSpeed - cur; if (add > 0) { const acc = Math.min(PH.accelGround * wishSpeed * dt, add); v.x += wd.x * acc; v.z += wd.z * acc; } }
-        if (this.wantJump && !this.planting && !this.defusing) { v.y = PH.jumpVel; b.onGround = false; b.jumping = true; this.wantJump = false; if (this.isPlayer) S3.Audio.jump(); else S3.Audio.jump(this.pos); this.game.emitNoise(this, 8); }
+        if (this.wantJump && !this.planting && !this.defusing) { v.y = PH.jumpVel; b.onGround = false; b.jumping = true; this.wantJump = false; if (this.isLocal) S3.Audio.jump(); else S3.Audio.jump(this.pos); this.game.emitNoise(this, 8); }
       } else {
         if (wishSpeed > 0) { const cap = Math.min(wishSpeed, PH.airSpeedCap); const cur = v.x * wd.x + v.z * wd.z; const add = cap - cur; if (add > 0) { const acc = Math.min(PH.accelAir * wishSpeed * dt, add); v.x += wd.x * acc; v.z += wd.z * acc; } }
         v.y -= PH.gravity * dt;
@@ -147,13 +153,13 @@
       const wasGround = b.onGround; b.landSpeed = 0;
       this.game.world.move(b, dt);
       if (!wasGround && b.onGround) {
-        if (b.landSpeed > 4) { if (this.isPlayer) S3.Audio.land(); else S3.Audio.land(this.pos); this.game.emitNoise(this, 10); }
+        if (b.landSpeed > 4) { if (this.isLocal) S3.Audio.land(); else S3.Audio.land(this.pos); this.game.emitNoise(this, 10); }
         if (b.landSpeed > PH.maxFallDamageSpeed) this.takeDamage((b.landSpeed - PH.maxFallDamageSpeed) * 12, null, 'body', 'fall', 0, 0, { ignoreArmor: true });
       }
       const sp = Math.hypot(v.x, v.z); this.speedFrac = sp / 5.5;
       // footsteps
       if (b.onGround && sp > 1.5 && !this.walking && !this.crouching) {
-        this.stepDist += sp * dt; if (this.stepDist > 2.3) { this.stepDist = 0; const surf = b.groundSurface || 'concrete'; if (this.isPlayer) S3.Audio.footstep(null, surf, 0.6); else S3.Audio.footstep(this.pos, surf, 1); this.game.emitNoise(this, 14); }
+        this.stepDist += sp * dt; if (this.stepDist > 2.3) { this.stepDist = 0; const surf = b.groundSurface || 'concrete'; if (this.isLocal) S3.Audio.footstep(null, surf, 0.6); else S3.Audio.footstep(this.pos, surf, 1); this.game.emitNoise(this, 14); }
       } else if (b.onGround && sp > 0.5) { this.stepDist += sp * dt * 0.4; }
       // recoil recovery
       const rec = (this.current && this.current.def.recoilRecover) || 8;
@@ -167,16 +173,16 @@
       const self = this; const w = this.current;
       return {
         speedFrac: this.speedFrac, onGround: this.body.onGround, crouching: this.crouching, scoped: this.scoped, isBot: this.isBot, alt: this.altHeld || this.altPressed,
-        onShot: (dirs, rs, ru) => self.game.actorShoot(self, dirs, rs, ru),
-        onKnife: (alt) => self.game.actorKnife(self, alt),
-        onDryFire: () => { if (self.isPlayer) S3.Audio.dryfire(); },
-        onBolt: (t) => { if (self.isPlayer) { self.game.vm.play('bolt', Math.min(0.5, t * 0.5)); setTimeout(() => S3.Audio.boltAction(self.isPlayer ? null : self.pos), 150); } else setTimeout(() => S3.Audio.boltAction(self.pos), 150); self.scoped = false; },
+        onShot: (dirs, rs, ru) => { if (self.isLocal && self.game.net && self.game.net.role === 'client') self.game.actorShootCosmetic(self, dirs, rs, ru); else self.game.actorShoot(self, dirs, rs, ru); },
+        onKnife: (alt) => { if (self.isLocal && self.game.net && self.game.net.role === 'client') self.game.actorKnifeCosmetic(self, alt); else self.game.actorKnife(self, alt); },
+        onDryFire: () => { if (self.isLocal) S3.Audio.dryfire(); else S3.Audio.dryfire(self.pos); },
+        onBolt: (t) => { if (self.isLocal) { self.game.vm.play('bolt', Math.min(0.5, t * 0.5)); setTimeout(() => S3.Audio.boltAction(self.isLocal ? null : self.pos), 150); } else setTimeout(() => S3.Audio.boltAction(self.pos), 150); self.scoped = false; },
         onReloadStage: (st) => {
-          const p = self.isPlayer ? null : self.pos;
-          if (st === 'start') { if (self.isPlayer) self.game.vm.play('reload', w.def.reloadTime); self.scoped = false; }
+          const p = self.isLocal ? null : self.pos;
+          if (st === 'start') { if (self.isLocal) self.game.vm.play('reload', w.def.reloadTime); self.scoped = false; }
           else if (st === 'magout') S3.Audio.reloadMagOut(p); else if (st === 'magin') S3.Audio.reloadMagIn(p); else if (st === 'done') S3.Audio.reloadSlide(p);
         },
-        onReloadShell: () => { S3.Audio.reloadMagIn(self.isPlayer ? null : self.pos); if (self.isPlayer) self.game.vm.play('reloadShell', 0.35); },
+        onReloadShell: () => { S3.Audio.reloadMagIn(self.isLocal ? null : self.pos); if (self.isLocal) self.game.vm.play('reloadShell', 0.35); },
       };
     }
     updateWeapon(dt) {

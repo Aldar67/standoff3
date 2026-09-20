@@ -44,12 +44,13 @@
         if (a.isBot) { a.forgetAll(); a.objective = null; a.goal = null; a.path = null; }
       }
       // give bomb to a random T
-      const ts = g.actors.filter((a) => a.team === 'T'); if (ts.length) { const carrier = S3.pick(ts); carrier.giveWeapon('bomb', true); if (carrier.isPlayer) g.hud.addChat('<span class="sys">У вас бомба! Установите её на точке A или B (слот 5, удерживайте ЛКМ).</span>'); }
+      const ts = g.actors.filter((a) => a.team === 'T'); if (ts.length) { const carrier = S3.pick(ts); carrier.giveWeapon('bomb', true); g.localChat(carrier, '<span class="sys">У вас бомба! Установите её на точке A или B (слот 5, удерживайте ЛКМ).</span>'); }
       // bots buy
       for (const a of g.actors) if (a.isBot) a.autoBuy();
       this.makePlan();
       g.hud.showBanner(`Раунд ${this.roundNumber}`, first ? 'Купите снаряжение (B)' : '', 3); S3.Audio.roundStart();
       g.hud.addChat(`<span class="sys">Раунд ${this.roundNumber}. Счёт ${S3.TEAM_NAME.CT} ${this.score.CT} : ${this.score.T} ${S3.TEAM_NAME.T}</span>`);
+      if (g.net && g.net.role === 'host') g.net.broadcastChat(`<span class="sys">Раунд ${this.roundNumber}. Счёт ${S3.TEAM_NAME.CT} ${this.score.CT} : ${this.score.T} ${S3.TEAM_NAME.T}</span>`);
       this.roundStartT = g.time; this.rushT = 40 + Math.random() * 40;
     }
     makePlan() {
@@ -77,7 +78,7 @@
         if (!aliveCT) return this.endRound('T', 'elim');
         if (!aliveT && !this.bombPlanted) return this.endRound('CT', 'elim');
         // bomb pickup by T
-        if (this.bombDropped) { for (const a of g.actors) { if (a.alive && a.team === 'T' && a.pos.distanceTo(this.bombDropped.pos) < 1.4) { g.effects.removePickup(this.bombDropped); this.bombDropped = null; a.giveWeapon('bomb', true); S3.Audio.pickup(); if (a.isPlayer) g.hud.addChat('<span class="sys">Вы подобрали бомбу</span>'); g.radio(a, 'Бомба у меня!'); break; } } }
+        if (this.bombDropped) { for (const a of g.actors) { if (a.alive && a.team === 'T' && a.pos.distanceTo(this.bombDropped.pos) < 1.4) { g.effects.removePickup(this.bombDropped); this.bombDropped = null; a.giveWeapon('bomb', true); S3.Audio.pickup(); g.localChat(a, '<span class="sys">Вы подобрали бомбу</span>'); g.radio(a, 'Бомба у меня!'); break; } } }
         // planter/defuser progress reset if they stopped
         if (this.planter && (g.time - this.planter._plantTick > 0.2)) { this.planter.planting = false; this.planter = null; this.plantProgress = 0; if (g.player.alive) g.hud.setProgress('', null); }
         if (this.defuser && (g.time - this.defuser._defuseTick > 0.2)) { this.defuser.defusing = false; this.defuser = null; this.defuseProgress = 0; if (g.player.alive) g.hud.setProgress('', null); }
@@ -90,43 +91,48 @@
     tryPlant(actor, dt, want) {
       if (this.phase !== 'live' || !actor.alive || !actor.hasBomb || this.bombPlanted) return null;
       const site = this.inSite(actor.pos.x, actor.pos.z);
-      if (!want) { if (this.planter === actor) { this.planter = null; actor.planting = false; this.plantProgress = 0; if (actor.isPlayer) this.game.hud.setProgress('', null); } return site ? 'insite' : 'notinsite'; }
-      if (!site) { if (actor.isPlayer) this.game.hud.setHint('Бомбу можно установить только на точке A или B'); return 'notinsite'; }
+      if (!want) { if (this.planter === actor) { this.planter = null; actor.planting = false; this.plantProgress = 0; this.game.localProgress(actor, '', null); } return site ? 'insite' : 'notinsite'; }
+      if (!site) { this.game.localHint(actor, 'Бомбу можно установить только на точке A или B'); return 'notinsite'; }
       if (!actor.body.onGround) return null;
       if (this.planter !== actor) { this.planter = actor; this.plantProgress = 0; actor.planting = true; }
       actor._plantTick = this.game.time; this.plantProgress += dt;
-      if (actor.isPlayer) { this.game.hud.setProgress('Установка бомбы...', this.plantProgress / R.plantTime); if (Math.floor(this.plantProgress * 6) !== Math.floor((this.plantProgress - dt) * 6)) S3.Audio.bombPlantTick(); }
+      this.game.localProgress(actor, 'Установка бомбы...', this.plantProgress / R.plantTime); if (actor.isLocal && Math.floor(this.plantProgress * 6) !== Math.floor((this.plantProgress - dt) * 6)) S3.Audio.bombPlantTick();
       if (this.plantProgress >= R.plantTime) { this.plant(actor, site); return 'planted'; }
       return 'planting';
     }
     plant(actor, site) {
       const g = this.game; this.bombPlanted = true; this.bombPos = actor.pos.clone(); this.bombTimeLeft = R.bombTime; this.bombSite = site; this.planter = null; actor.planting = false; this.plantProgress = 0;
-      actor.removeWeapon(actor.inv.bomb); actor.money = Math.min(E.maxMoney, actor.money + E.plantBonus); actor.score += 2; actor.bombPlants = (actor.bombPlants || 0) + 1; if (actor.isPlayer) { S3.Stats.data.bombPlants++; g.hud.setProgress('', null); }
+      actor.removeWeapon(actor.inv.bomb); actor.money = Math.min(E.maxMoney, actor.money + E.plantBonus); actor.score += 2; actor.bombPlants = (actor.bombPlants || 0) + 1; if (actor.isLocal) { S3.Stats.data.bombPlants++; } g.localProgress(actor, '', null);
       g.effects.placeBomb(this.bombPos); S3.Audio.bombPlanted(); g.hud.showBanner('Бомба установлена!', `Точка ${site.name} · 40 секунд`, 3, '#ffb040');
-      g.hud.addChat(`<span class="sys">${actor.name} установил бомбу на точке ${site.name}</span>`); g.emitNoiseAt(this.bombPos, 40, actor);
+      if (g.net && g.net.role === 'host') g.net.sendBombEvent('bombplant', this.bombPos, site.name);
+      g.hud.addChat(`<span class="sys">${actor.name} установил бомбу на точке ${site.name}</span>`);
+      if (g.net && g.net.role === 'host') g.net.broadcastChat(`<span class="sys">${actor.name} установил бомбу на точке ${site.name}</span>`); g.emitNoiseAt(this.bombPos, 40, actor);
       for (const a of g.actors) if (a.isBot) { a.objective = null; a.objT = 0; }
       this.timeLeft = 0;
     }
     tryDefuse(actor, dt, want) {
       if (this.phase !== 'live' || !actor.alive || actor.team !== 'CT' || !this.bombPlanted) return null;
       const d = actor.pos.distanceTo(this.bombPos);
-      if (d > 1.6) { if (this.defuser === actor) { this.defuser = null; actor.defusing = false; this.defuseProgress = 0; if (actor.isPlayer) this.game.hud.setProgress('', null); } return 'far'; }
-      if (actor.isPlayer && !want) this.game.hud.setHint('Удерживайте E, чтобы обезвредить бомбу');
-      if (!want) { if (this.defuser === actor) { this.defuser = null; actor.defusing = false; this.defuseProgress = 0; if (actor.isPlayer) this.game.hud.setProgress('', null); } return 'near'; }
-      if (this.defuser && this.defuser !== actor && this.defuser.alive && this.game.time - this.defuser._defuseTick < 0.3) { if (actor.isPlayer) this.game.hud.setHint(`${this.defuser.name} уже обезвреживает бомбу`); return 'busy'; }
+      if (d > 1.6) { if (this.defuser === actor) { this.defuser = null; actor.defusing = false; this.defuseProgress = 0; this.game.localProgress(actor, '', null); } return 'far'; }
+      if (!want) this.game.localHint(actor, 'Удерживайте E, чтобы обезвредить бомбу');
+      if (!want) { if (this.defuser === actor) { this.defuser = null; actor.defusing = false; this.defuseProgress = 0; this.game.localProgress(actor, '', null); } return 'near'; }
+      if (this.defuser && this.defuser !== actor && this.defuser.alive && this.game.time - this.defuser._defuseTick < 0.3) { this.game.localHint(actor, `${this.defuser.name} уже обезвреживает бомбу`); return 'busy'; }
       if (this.defuser !== actor) { this.defuser = actor; this.defuseProgress = 0; actor.defusing = true; if (actor.isBot && this.game.time - (this._defRadioT || -99) > 8) { this._defRadioT = this.game.time; this.game.radio(actor, 'Обезвреживаю бомбу, прикройте!'); } }
       actor._defuseTick = this.game.time; this.defuseProgress += dt; const need = actor.defuser ? R.defuseKitTime : R.defuseTime;
-      if (actor.isPlayer) { this.game.hud.setProgress(actor.defuser ? 'Обезвреживание (набор сапёра)...' : 'Обезвреживание...', this.defuseProgress / need); if (Math.floor(this.defuseProgress * 4) !== Math.floor((this.defuseProgress - dt) * 4)) S3.Audio.defuseTick(); }
+      this.game.localProgress(actor, actor.defuser ? 'Обезвреживание (набор сапёра)...' : 'Обезвреживание...', this.defuseProgress / need); if (actor.isLocal && Math.floor(this.defuseProgress * 4) !== Math.floor((this.defuseProgress - dt) * 4)) S3.Audio.defuseTick();
       if (this.defuseProgress >= need) { this.defused(actor); return 'defused'; }
       return 'defusing';
     }
     defused(actor) {
-      const g = this.game; actor.defusing = false; this.defuser = null; actor.score += 2; actor.money = Math.min(E.maxMoney, actor.money + 300); actor.bombDefuses = (actor.bombDefuses || 0) + 1; if (actor.isPlayer) { S3.Stats.data.bombDefuses++; g.hud.setProgress('', null); }
+      const g = this.game; actor.defusing = false; this.defuser = null; actor.score += 2; actor.money = Math.min(E.maxMoney, actor.money + 300); actor.bombDefuses = (actor.bombDefuses || 0) + 1; if (actor.isLocal) { S3.Stats.data.bombDefuses++; } g.localProgress(actor, '', null);
       S3.Audio.bombDefused(); g.effects.removeBomb(); g.hud.addChat(`<span class="sys">${actor.name} обезвредил бомбу</span>`);
+      if (g.net && g.net.role === 'host') g.net.broadcastChat(`<span class="sys">${actor.name} обезвредил бомбу</span>`);
+      if (g.net && g.net.role === 'host') g.net.sendBombEvent('bombdefuse', null, null);
       this.endRound('CT', 'defused', actor);
     }
     explode() {
       const g = this.game; const p = this.bombPos; g.effects.removeBomb(); g.effects.explosion(p.x, p.y, p.z, true); S3.Audio.explosion(p, true); g.shake(p, 40, 1.5);
+      if (g.net && g.net.role === 'host') g.net.sendBombEvent('bombexplode', p, null);
       for (const a of g.actors) { if (!a.alive) continue; const d = a.pos.distanceTo(p); if (d < 22) { const dmg = Math.max(0, 1 - d / 22) * 500; a.takeDamage(dmg, this.planterActor || null, 'body', 'bomb', 0, 0, { ignoreArmor: true }); } }
       this.bombPlanted = false; this.endRound('T', 'exploded');
     }
@@ -151,9 +157,10 @@
       g.hud.showBanner(won ? 'ПОБЕДА В РАУНДЕ' : 'ПОРАЖЕНИЕ В РАУНДЕ', reasonText + (mvp ? ` · MVP: ${mvp.name}` : ''), R.endTime - 0.5, won ? '#6fdc6f' : '#ff6060');
       if (won) S3.Audio.roundWin(); else S3.Audio.roundLose();
       g.hud.addChat(`<span class="sys">${S3.TEAM_NAME[winner]} выиграли раунд (${reasonText}). ${won ? '+' + winMoney : '+' + lossMoney + '$ за поражение'}</span>`);
+      if (g.net && g.net.role === 'host') g.net.broadcastChat(`<span class="sys">${S3.TEAM_NAME[winner]} выиграли раунд (${reasonText}). ${won ? '+' + winMoney : '+' + lossMoney + '$ за поражение'}</span>`);
       this.bombPlanted = false; g.effects.removeBomb();
       if (this.score[winner] >= this.winsNeeded) { setTimeout(() => this.endMatch(winner, `${S3.TEAM_NAME[winner]} побеждают ${this.score.CT}:${this.score.T}`), 2500); }
-      if (mvp && mvp.isPlayer) { S3.Stats.data.wins = S3.Stats.data.wins; }
+      // (per-round MVP tally is derived from match result in Game.matchOver; nothing to do here)
     }
     nextRound() {
       if (this.over) return; this.roundNumber++;
@@ -165,6 +172,7 @@
       const s = this.score.CT; this.score.CT = this.score.T; this.score.T = s; this.lossStreak = { CT: 0, T: 0 };
       g.vm.buildArms(g.player.team); g.hud.showBanner('Смена сторон', `Вы теперь за ${S3.TEAM_NAME[g.player.team]}`, 4, '#ffd060');
       g.hud.addChat('<span class="sys">Смена сторон! Деньги сброшены.</span>');
+      if (g.net && g.net.role === 'host') g.net.broadcastChat('<span class="sys">Смена сторон! Деньги сброшены.</span>');
     }
     onDeath(v, a, w, hs) {
       if (v.hasBomb) this.bombCarrierDied(v);
@@ -235,13 +243,13 @@
       if (this.timeLeft <= 0) { const w = this.winnerNow(); this.endMatch(w.team, w.text); }
     }
     winnerNow() {
-      if (this.ffa) { const best = this.game.actors.slice().sort((a, b) => b.kills - a.kills)[0]; return { team: best.isPlayer ? this.game.player.team : null, text: `${best.name} побеждает (${best.kills} убийств)`, actor: best }; }
+      if (this.ffa) { const best = this.game.actors.slice().sort((a, b) => b.kills - a.kills)[0]; return { team: best.isLocal ? this.game.player.team : null, text: `${best.name} побеждает (${best.kills} убийств)`, actor: best }; }
       const w = this.score.CT === this.score.T ? null : (this.score.CT > this.score.T ? 'CT' : 'T'); return { team: w, text: w ? `${S3.TEAM_NAME[w]} побеждают ${this.score.CT}:${this.score.T}` : `Ничья ${this.score.CT}:${this.score.T}` };
     }
     onDeath(v, a, w, hs) {
       v.respawnT = this.respawnTime;
       if (a && a !== v && this.game.isEnemy(a, v)) {
-        if (this.ffa) { if (a.kills >= this.killLimit) this.endMatch(a.isPlayer ? this.game.player.team : null, `${a.name} побеждает!`); }
+        if (this.ffa) { if (a.kills >= this.killLimit) this.endMatch(a.isLocal ? this.game.player.team : null, `${a.name} побеждает!`); }
         else { this.score[a.team]++; if (this.score[a.team] >= this.killLimit) this.endMatch(a.team, `${S3.TEAM_NAME[a.team]} побеждают ${this.score.CT}:${this.score.T}`); }
       }
     }
@@ -272,9 +280,12 @@
         if (last) { this.endMatch(a.team, `${a.name} побеждает в гонке вооружений!`); return; }
         a.level += (w === 'knife' ? 2 : 1); if (a.level > this.order.length - 1) a.level = this.order.length - 1;
         if (a.alive) { this.giveLevelWeapon(a); }
-        if (a.isPlayer) { S3.Audio.levelUp(); this.game.hud.showBanner(`Уровень ${a.level + 1}`, S3.WEAPONS[this.order[a.level]].name, 1.5, '#ffd060'); }
+        if (a.isLocal) { S3.Audio.levelUp(); this.game.hud.showBanner(`Уровень ${a.level + 1}`, S3.WEAPONS[this.order[a.level]].name, 1.5, '#ffd060'); } else if (a.isPlayer && this.game.net) this.game.net.sendLevelUp(a);
         this.score[a.team] = Math.max(this.score[a.team], a.level + 1);
-        if (a.level === this.order.length - 1) this.game.hud.addChat(`<span class="sys">${a.name} на последнем уровне — нож!</span>`);
+        if (a.level === this.order.length - 1) {
+          this.game.hud.addChat(`<span class="sys">${a.name} на последнем уровне — нож!</span>`);
+          if (this.game.net && this.game.net.role === 'host') this.game.net.broadcastChat(`<span class="sys">${a.name} на последнем уровне — нож!</span>`);
+        }
       }
     }
     hudState() { const top = this.game.actors.slice().sort((a, b) => b.level - a.level)[0]; return { timer: S3.fmtTime(this.timeLeft), timerClass: '', scoreCT: this.game.player.level + 1, scoreT: top ? top.level + 1 : 1, roundLabel: `Ваш уровень / Лидер (${top ? top.name : ''})` }; }
